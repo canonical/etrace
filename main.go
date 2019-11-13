@@ -40,10 +40,11 @@ func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 }
 
 type cmdRun struct {
-	WindowName    string `short:"w" long:"window-name" description:"Window name to wait for" required:"yes"`
+	WindowName    string `short:"w" long:"window-name" description:"Window name to wait for"`
 	PrepareScript string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
 	CleanupScript string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
 	Iterations    string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
+	WindowClass   string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
 	Args          struct {
 		Cmd []string `description:"Command to run" required:"yes"`
 	} `positional-args:"yes" required:"yes"`
@@ -155,8 +156,21 @@ func (x *cmdRun) Execute(args []string) error {
 	// err = waitForWindowStateChangeWmctrl(x.WindowName, true)
 	tryXToolClose := true
 	tryWmctrl := false
-	// use the file base in case the cmd is an absolute command
-	wids, err := xtool.waitForWindows(filepath.Base(x.Args.Cmd[0]))
+
+	windowspec := window{}
+	// check which opts are defined
+	if x.WindowClass != "" {
+		// prefer window class from option
+		windowspec.class = x.WindowClass
+	} else if x.WindowName != "" {
+		// then window name
+		windowspec.name = x.WindowName
+	} else {
+		// finally fall back to base cmd as the class
+		windowspec.class = filepath.Base(x.Args.Cmd[0])
+	}
+
+	wids, err := xtool.waitForWindow(windowspec)
 	if err != nil {
 		log.Println("error waiting for window appearance:", err)
 		// if we don't get the wid properly then we can't try closing
