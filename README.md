@@ -1,5 +1,5 @@
 # etrace
-[![Actions Status](https://github.com/anonymouse64/etrace/workflows/go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
+[![Actions Status](https://github.com/anonymouse64/etrace/workflows/Go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
 
 _etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis.
 
