@@ -1,0 +1,7 @@
+The following open source projects were used to build etrace:
+
+github.com/snapcore/snapd (GPLV3) https://github.com/snapcore/snapd
+https://github.com/SNapcore/snapd/blob/master/COPYING
+
+github.com/jessevdk/go-flags (BSD-3) https://github.com/jessevdk/go-flags
+https://github.com/jessevdk/go-flags/blob/master/LICENSE
