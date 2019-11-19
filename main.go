@@ -23,6 +23,17 @@ type Command struct {
 	Run cmdRun `command:"run" description:"Run a command"`
 }
 
+type cmdRun struct {
+	WindowName    string `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	CleanupScript string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	Iterations    string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
+	WindowClass   string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	Args          struct {
+		Cmd []string `description:"Command to run" required:"yes"`
+	} `positional-args:"yes" required:"yes"`
+}
+
 // The current input command
 var currentCmd Command
 var parser = flags.NewParser(&currentCmd, flags.Default)
@@ -37,17 +48,6 @@ func main() {
 
 func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
-}
-
-type cmdRun struct {
-	WindowName    string `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	CleanupScript string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	Iterations    string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
-	WindowClass   string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	Args          struct {
-		Cmd []string `description:"Command to run" required:"yes"`
-	} `positional-args:"yes" required:"yes"`
 }
 
 func freeCaches() error {
