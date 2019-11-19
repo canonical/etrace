@@ -29,6 +29,7 @@ type cmdRun struct {
 	CleanupScript string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
 	Iterations    string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
 	WindowClass   string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace       bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
 	Args          struct {
 		Cmd []string `description:"Command to run" required:"yes"`
 	} `positional-args:"yes" required:"yes"`
@@ -108,46 +109,64 @@ func (x *cmdRun) Execute(args []string) error {
 	}
 
 	xtool := makeXDoTool()
-	// setup private tmp dir with strace fifo
-	straceTmp, err := ioutil.TempDir("", "exec-trace")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(straceTmp)
-	straceLog := filepath.Join(straceTmp, "strace.fifo")
-	if err := syscall.Mkfifo(straceLog, 0640); err != nil {
-		return err
-	}
-	// ensure we have one writer on the fifo so that if strace fails
-	// nothing blocks
-	fw, err := os.OpenFile(straceLog, os.O_RDWR, 0640)
-	if err != nil {
-		return err
-	}
-	defer fw.Close()
 
-	// read strace data from fifo async
-	var slg *ExecveTiming
-	var straceErr error
 	doneCh := make(chan bool, 1)
-	go func() {
-		// FIXME: make this configurable?
-		nSlowest := 1000
-		slg, straceErr = TraceExecveTimings(straceLog, nSlowest)
-		close(doneCh)
-	}()
+	var straceErr error
+	var slg *ExecveTiming
+	var cmd *exec.Cmd
+	var fw *os.File
+	if !x.NoTrace {
+		// setup private tmp dir with strace fifo
+		straceTmp, err := ioutil.TempDir("", "exec-trace")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(straceTmp)
+		straceLog := filepath.Join(straceTmp, "strace.fifo")
+		if err := syscall.Mkfifo(straceLog, 0640); err != nil {
+			return err
+		}
+		// ensure we have one writer on the fifo so that if strace fails
+		// nothing blocks
+		fw, err = os.OpenFile(straceLog, os.O_RDWR, 0640)
+		if err != nil {
+			return err
+		}
+		defer fw.Close()
 
-	cmd, err := TraceExecCommand(straceLog, x.Args.Cmd...)
-	if err != nil {
-		return err
+		// read strace data from fifo async
+		go func() {
+			slg, straceErr = TraceExecveTimings(straceLog, -1)
+			close(doneCh)
+		}()
+
+		cmd, err = TraceExecCommand(straceLog, x.Args.Cmd...)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Don't setup tracing, so just use exec.Command directly
+		// x.Args.Cmd is guaranteed to be at least one element given that it is a
+		// required argument
+		// but be careful if there's not more than 1
+		prog := x.Args.Cmd[0]
+		var args []string
+		if len(x.Args.Cmd) > 1 {
+			args = x.Args.Cmd[1:]
+		}
+		cmd = exec.Command(prog, args...)
 	}
+
+	// redirect all output from the child process to here
+	// TODO: make this configurable to go to a logfile or something for many
+	// iterations to make the results easier to parse?
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	// before running the final command, free the caches to get most accurate
 	// timing
-	err = freeCaches()
+	err := freeCaches()
 	if err != nil {
 		return err
 	}
@@ -231,19 +250,21 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 	}
 
-	// ensure we close the fifo here so that the strace.TraceExecCommand()
-	// helper gets a EOF from the fifo (i.e. all writers must be closed
-	// for this)
-	fw.Close()
+	if !x.NoTrace {
+		// ensure we close the fifo here so that the strace.TraceExecCommand()
+		// helper gets a EOF from the fifo (i.e. all writers must be closed
+		// for this)
+		fw.Close()
 
-	// wait for strace reader
-	<-doneCh
-	if straceErr == nil {
-		// make a new tabwriter to stderr
-		w := tabWriterGeneric(os.Stderr)
-		slg.Display(w)
-	} else {
-		log.Printf("cannot extract runtime data: %v\n", straceErr)
+		// wait for strace reader
+		<-doneCh
+		if straceErr == nil {
+			// make a new tabwriter to stderr
+			w := tabWriterGeneric(os.Stderr)
+			slg.Display(w)
+		} else {
+			log.Printf("cannot extract runtime data: %v\n", straceErr)
+		}
 	}
 
 	fmt.Println("Total startup time:", startup)
