@@ -39,8 +39,13 @@ var currentCmd Command
 var parser = flags.NewParser(&currentCmd, flags.Default)
 
 func main() {
+	_, err := exec.LookPath("sudo")
+	if err != nil {
+		log.Fatalf("cannot find sudo: %s", err)
+	}
+
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	_, err := parser.Parse()
+	_, err = parser.Parse()
 	if err != nil {
 		os.Exit(1)
 	}
