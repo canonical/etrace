@@ -1,0 +1,87 @@
+name: gnome-calculator
+version: 3.34.1+git1.d34dc842
+summary: GNOME Calculator
+description: |
+  GNOME Calculator is an application that solves mathematical equations.
+  Though it at first appears to be a simple calculator with only basic
+  arithmetic operations, you can switch into Advanced, Financial, or
+  Programming mode to find a surprising set of capabilities.
+
+  The Advanced calculator supports many operations, including:
+  logarithms, factorials, trigonometric and hyperbolic functions,
+  modulus division, complex numbers, random number generation, prime
+  factorization and unit conversions.
+
+  Financial mode supports several computations, including periodic interest
+  rate, present and future value, double declining and straight line
+  depreciation, and many others.
+
+  Programming mode supports conversion between common bases (binary, octal,
+  decimal, and hexadecimal), boolean algebra, one’s and two’s complementation,
+  character to character code conversion, and more.
+apps:
+  gnome-calculator:
+    command: usr/bin/gnome-calculator
+    command-chain:
+      - snap/command-chain/snapcraft-runner
+      - snap/command-chain/desktop-launch
+      - strip-ld-library-path.sh
+      # - ld-debug.sh
+    environment:
+      LD_LIBRARY_PATH: $LD_LIBRARY_PATH:$SNAP/lib/gnome-calculator
+    plugs:
+      - gsettings
+      - network
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+architectures:
+  - amd64
+assumes:
+  - command-chain
+base: core18
+confinement: strict
+environment:
+  SNAP_DESKTOP_RUNTIME: $SNAP/gnome-platform
+grade: stable
+layout:
+  /usr/bin/gjs:
+    symlink: $SNAP/gnome-platform/usr/bin/gjs
+  /usr/lib/x86_64-linux-gnu/webkit2gtk-4.0:
+    bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/webkit2gtk-4.0
+  /usr/share/xml/iso-codes:
+    bind: $SNAP/gnome-platform/usr/share/xml/iso-codes
+  /etc/ld.so.cache:
+    bind-file: $SNAP_DATA/etc/ld.so.cache
+hooks:
+  install:
+    plugs:
+      - opengl
+    environment:
+      LD_LIBRARY_PATH: $LD_LIBRARY_PATH:$SNAP/lib/gnome-calculator
+    command-chain:
+      - snap/command-chain/snapcraft-runner
+      - snap/command-chain/desktop-launch
+plugs:
+  gnome-3-28-1804:
+    interface: content
+    target: $SNAP/gnome-platform
+    default-provider: gnome-3-28-1804
+  gtk-3-themes:
+    interface: content
+    target: $SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: $SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: $SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+slots:
+  gnome-calculator:
+    interface: dbus
+    bus: session
+    name: org.gnome.Calculator

@@ -1,0 +1,1 @@
+snap remove gnome-calculator gnome-3-28-1804 gtk-common-themes && snap install gnome-3-28-1804 gtk-common-themes && snap install --dangerous gnome-calculator_3.34.1+git1.d34dc842_amd64.snap && sudo snap run --hook=install gnome-calculator && ./etrace run -c gnome-calculator snap run gnome-calculator
