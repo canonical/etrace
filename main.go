@@ -226,14 +226,6 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 	}
 
-	// finally kill the process we started as sudo to _really_ kill it
-	// stracePid := strconv.Itoa(cmd.Process.Pid)
-	// out, err := exec.Command("sudo", "kill", "-9", stracePid).CombinedOutput()
-	// if err != nil {
-	// 	log.Println(out)
-	// 	log.Println("error killing initial strace process:", err)
-	// }
-
 	// ensure we close the fifo here so that the strace.TraceExecCommand()
 	// helper gets a EOF from the fifo (i.e. all writers must be closed
 	// for this)
