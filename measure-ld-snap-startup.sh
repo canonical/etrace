@@ -5,7 +5,7 @@ run=$RANDOM
 go build ./...
 
 for opt in trace notrace; do
-    for the_snap in gnome-calculator chromium; do
+    for the_snap in chromium; do
 
         vanillafile=$the_snap-$opt-snap-$run.txt
         ldfile=$the_snap-ld-snap-$run.txt
@@ -13,7 +13,7 @@ for opt in trace notrace; do
         touch $vanillafile
         touch $ldfile
 
-        for i in $(seq 1 10); do
+        for i in $(seq 1 2); do
             if [ $opt = trace ]; then
                 out=$(./etrace run -p "$(pwd)/prepare-$the_snap.sh" -c "$the_snap" snap run "$the_snap" 2>&1)
             else 
@@ -23,7 +23,7 @@ for opt in trace notrace; do
             echo "$start" >> "$vanillafile"
         done
 
-        for j in $(seq 1 10); do
+        for j in $(seq 1 2); do
             if [ $opt = trace ]; then
                 out=$(./etrace run -p "$(pwd)/prepare-ld-cached-$the_snap.sh" -c "$the_snap" snap run "$the_snap" 2>&1)
             else 
