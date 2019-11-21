@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -24,13 +25,16 @@ type Command struct {
 }
 
 type cmdRun struct {
-	WindowName    string `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	CleanupScript string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	Iterations    string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
-	WindowClass   string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace       bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	Args          struct {
+	WindowName     string `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript  string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	CleanupScript  string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	Iterations     string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
+	WindowClass    string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace        bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	RunThroughSnap bool   `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs  bool   `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+
+	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
 	} `positional-args:"yes" required:"yes"`
 }
@@ -74,6 +78,16 @@ func freeCaches() error {
 	return nil
 }
 
+// discardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
+// of setting up that snap's namespace
+func discardSnapNs(snap string) error {
+	out, err := exec.Command("sudo", "/usr/lib/snapd/snap-discard-ns", snap).CombinedOutput()
+	if err != nil {
+		log.Println(string(out))
+	}
+	return err
+}
+
 // waitForWindowStateChangeWmctrl waits for a window to appear or disappear using
 // wmctrl
 // func waitForWindowStateChangeWmctrl(name string, appearing bool) error {
@@ -110,6 +124,12 @@ func (x *cmdRun) Execute(args []string) error {
 
 	xtool := makeXDoTool()
 
+	// handle if the command should be run through `snap run`
+	targetCmd := x.Args.Cmd
+	if x.RunThroughSnap {
+		targetCmd = append([]string{"snap", "run"}, targetCmd...)
+	}
+
 	doneCh := make(chan bool, 1)
 	var straceErr error
 	var slg *ExecveTiming
@@ -140,19 +160,19 @@ func (x *cmdRun) Execute(args []string) error {
 			close(doneCh)
 		}()
 
-		cmd, err = TraceExecCommand(straceLog, x.Args.Cmd...)
+		cmd, err = TraceExecCommand(straceLog, targetCmd...)
 		if err != nil {
 			return err
 		}
 	} else {
 		// Don't setup tracing, so just use exec.Command directly
-		// x.Args.Cmd is guaranteed to be at least one element given that it is a
-		// required argument
-		// but be careful if there's not more than 1
-		prog := x.Args.Cmd[0]
+		// x.Args.Cmd (and thus targetCmd) is guaranteed to be at least one
+		// element given that it is a required argument
+		prog := targetCmd[0]
 		var args []string
-		if len(x.Args.Cmd) > 1 {
-			args = x.Args.Cmd[1:]
+		// setup args if there's more than 1
+		if len(targetCmd) > 1 {
+			args = targetCmd[1:]
 		}
 		cmd = exec.Command(prog, args...)
 	}
@@ -163,6 +183,14 @@ func (x *cmdRun) Execute(args []string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	if x.DiscardSnapNs {
+		if !x.RunThroughSnap {
+			return errors.New("cannot use --discard-snap-ns without --use-snap-run")
+		}
+		// the name of the snap in this case is the first argument
+		discardSnapNs(x.Args.Cmd[0])
+	}
 
 	// before running the final command, free the caches to get most accurate
 	// timing
@@ -191,6 +219,11 @@ func (x *cmdRun) Execute(args []string) error {
 		windowspec.name = x.WindowName
 	} else {
 		// finally fall back to base cmd as the class
+		// note we use the original command and note the processed targetCmd
+		// because for example when measuring a snap, we invoke etrace like so:
+		// $ ./etrace run --use-snap chromium
+		// where targetCmd becomes []string{"snap","run","chromium"}
+		// but we still want to use "chromium" as the windowspec class
 		windowspec.class = filepath.Base(x.Args.Cmd[0])
 	}
 
@@ -232,7 +265,7 @@ func (x *cmdRun) Execute(args []string) error {
 			// FindProcess always succeeds on unix
 			proc, _ := os.FindProcess(pid)
 			if err := proc.Signal(os.Kill); err != nil {
-				// if the process already exited then don't fail and try wmctrl
+				// if the process already exited then try wmctrl
 				if !strings.Contains(err.Error(), "process already finished") {
 					log.Printf("failed to kill window process %d: %v\n", pid, err)
 					tryWmctrl = true
