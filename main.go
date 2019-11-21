@@ -27,7 +27,7 @@ type Command struct {
 type cmdRun struct {
 	WindowName       string `short:"w" long:"window-name" description:"Window name to wait for"`
 	PrepareScript    string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	CleanupScript    string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScript    string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
 	Iterations       string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
 	WindowClass      string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
 	NoTrace          bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
@@ -336,8 +336,8 @@ func (x *cmdRun) Execute(args []string) error {
 
 	fmt.Println("Total startup time:", startup)
 
-	if x.CleanupScript != "" {
-		err := runScript(x.CleanupScript)
+	if x.RestoreScript != "" {
+		err := runScript(x.RestoreScript)
 		if err != nil {
 			log.Println(err)
 		}
