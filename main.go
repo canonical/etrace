@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +25,18 @@ type Command struct {
 	Run        cmdRun `command:"run" description:"Run a command"`
 	ShowErrors bool   `short:"e" long:"errors" description:"Show errors as they happen"`
 }
+
+// OutputResult is the result of running a command with various information
+// encoded in it
+type OutputResult struct {
+	Runs []Execution
+}
+
+type Execution struct {
+	ExecveTiming  *ExecveTiming
+	TimeToDisplay time.Duration
+	TimeToRun     time.Duration
+	Errors        []error
 }
 
 type cmdRun struct {
@@ -37,6 +50,7 @@ type cmdRun struct {
 	DiscardSnapNs    bool   `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
 	ProgramStdoutLog string `long:"cmd-stdout" description:"Log file for run command's stdout"`
 	ProgramStderrLog string `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	JSONOutput       bool   `long:"json" description:"Output results in JSON"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -339,14 +353,14 @@ func (x *cmdRun) Execute(args []string) error {
 		<-doneCh
 		if straceErr == nil {
 			// make a new tabwriter to stderr
-			w := tabWriterGeneric(os.Stderr)
-			slg.Display(w)
+			if !x.JSONOutput {
+				w := tabWriterGeneric(os.Stderr)
+				slg.Display(w)
+			}
 		} else {
 			logError(fmt.Errorf("cannot extract runtime data: %w", straceErr))
 		}
 	}
-
-	fmt.Println("Total startup time:", startup)
 
 	if x.RestoreScript != "" {
 		err := runScript(x.RestoreScript)
@@ -355,5 +369,22 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 	}
 
-	return err
+	out := OutputResult{
+		Runs: []Execution{
+			{
+				ExecveTiming:  slg,
+				TimeToDisplay: startup,
+				TimeToRun:     slg.TotalTime,
+				Errors:        errs,
+			},
+		},
+	}
+
+	if x.JSONOutput {
+		json.NewEncoder(os.Stdout).Encode(out)
+	} else {
+		fmt.Println("Total startup time:", startup)
+	}
+
+	return nil
 }
