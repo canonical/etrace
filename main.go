@@ -25,14 +25,16 @@ type Command struct {
 }
 
 type cmdRun struct {
-	WindowName     string `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript  string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	CleanupScript  string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	Iterations     string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
-	WindowClass    string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace        bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	RunThroughSnap bool   `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs  bool   `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	WindowName       string `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript    string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	CleanupScript    string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	Iterations       string `short:"n" long:"number-iterations" description:"Number of iterations to run"`
+	WindowClass      string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace          bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	RunThroughSnap   bool   `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs    bool   `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog string `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog string `long:"cmd-stderr" description:"Log file for run command's stderr"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -102,6 +104,15 @@ func discardSnapNs(snap string) error {
 // 		}
 // 	}
 // }
+
+func ensureFileExistsAndOpen(fname string) (*os.File, error) {
+	// if the file doesn't exist, create it
+	if _, err := os.Stat(fname); os.IsNotExist(err) {
+		return os.Create(fname)
+	}
+	// otherwise just try to open it directly
+	return os.Open(fname)
+}
 
 func wmctrlCloseWindow(name string) error {
 	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
@@ -177,12 +188,28 @@ func (x *cmdRun) Execute(args []string) error {
 		cmd = exec.Command(prog, args...)
 	}
 
-	// redirect all output from the child process to here
-	// TODO: make this configurable to go to a logfile or something for many
-	// iterations to make the results easier to parse?
 	cmd.Stdin = os.Stdin
+	// redirect all output from the child process to the log files if they exist
+	// otherwise just to this process's stdout, etc.
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	if x.ProgramStdoutLog != "" {
+		f, err := ensureFileExistsAndOpen(x.ProgramStdoutLog)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		cmd.Stdout = f
+	}
+	if x.ProgramStderrLog != "" {
+		f, err := ensureFileExistsAndOpen(x.ProgramStderrLog)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		cmd.Stderr = f
+	}
 
 	if x.DiscardSnapNs {
 		if !x.RunThroughSnap {
