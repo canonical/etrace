@@ -105,6 +105,15 @@ func discardSnapNs(snap string) error {
 // 	}
 // }
 
+func runScript(fname string) error {
+	out, err := exec.Command(fname).CombinedOutput()
+	if err != nil {
+		log.Println(string(out))
+		log.Printf("failed to run prepare script (%s): %v", fname, err)
+	}
+	return err
+}
+
 func ensureFileExistsAndOpen(fname string) (*os.File, error) {
 	// if the file doesn't exist, create it
 	if _, err := os.Stat(fname); os.IsNotExist(err) {
@@ -126,14 +135,11 @@ func wmctrlCloseWindow(name string) error {
 func (x *cmdRun) Execute(args []string) error {
 	// run the prepare script if it's available
 	if x.PrepareScript != "" {
-		out, err := exec.Command(x.PrepareScript).CombinedOutput()
+		err := runScript(x.PrepareScript)
 		if err != nil {
-			log.Println(string(out))
-			log.Printf("failed to run prepare script (%s): %v", x.PrepareScript, err)
+			log.Println(err)
 		}
 	}
-
-	xtool := makeXDoTool()
 
 	// handle if the command should be run through `snap run`
 	targetCmd := x.Args.Cmd
@@ -254,6 +260,7 @@ func (x *cmdRun) Execute(args []string) error {
 		windowspec.class = filepath.Base(x.Args.Cmd[0])
 	}
 
+	xtool := makeXDoTool()
 	wids, err := xtool.waitForWindow(windowspec)
 	if err != nil {
 		log.Println("error waiting for window appearance:", err)
@@ -330,10 +337,9 @@ func (x *cmdRun) Execute(args []string) error {
 	fmt.Println("Total startup time:", startup)
 
 	if x.CleanupScript != "" {
-		out, err := exec.Command(x.CleanupScript).CombinedOutput()
+		err := runScript(x.CleanupScript)
 		if err != nil {
-			log.Println(string(out))
-			log.Printf("failed to run cleanup script (%s): %v", x.PrepareScript, err)
+			log.Println(err)
 		}
 	}
 
