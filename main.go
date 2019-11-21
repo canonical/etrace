@@ -32,6 +32,7 @@ type OutputResult struct {
 	Runs []Execution
 }
 
+// Execution represents a single run
 type Execution struct {
 	ExecveTiming  *ExecveTiming
 	TimeToDisplay time.Duration
@@ -260,9 +261,8 @@ func (x *cmdRun) Execute(args []string) error {
 		return err
 	}
 
+	// start running the command
 	start := time.Now()
-
-	// start the command running
 	err = cmd.Start()
 
 	// now wait until the window appears
