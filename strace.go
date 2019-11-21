@@ -23,6 +23,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"os/exec"
 	"os/user"
@@ -34,7 +35,7 @@ import (
 
 // ExeRuntime is the runtime of an individual executable
 type ExeRuntime struct {
-	Start    time.Duration
+	Start    time.Time
 	Exe      string
 	TotalSec time.Duration
 }
@@ -42,13 +43,22 @@ type ExeRuntime struct {
 // ExecveTiming measures the execve calls timings under strace. This is
 // useful for performance analysis. It keeps the N slowest samples.
 type ExecveTiming struct {
-	TotalTime   float64
-	exeRuntimes []ExeRuntime
+	TotalTime   time.Duration
+	ExeRuntimes []ExeRuntime
 	indent      string
 
 	pidChildren *pidChildTracker
 
 	nSlowestSamples int
+}
+
+func unixFloatSecondsToTime(t float64) time.Time {
+	if t > math.MaxInt64 || t < math.MinInt64 {
+		panic(fmt.Sprintf("time %f is outside of int64 range", t))
+	}
+	startUnixSeconds := math.Floor(t)
+	startUnixNanoseconds := (t - startUnixSeconds) * float64(time.Second/time.Nanosecond)
+	return time.Unix(int64(startUnixSeconds), int64(startUnixNanoseconds))
 }
 
 // NewExecveTiming returns a new ExecveTiming struct that keeps
@@ -59,9 +69,8 @@ func NewExecveTiming(nSlowestSamples int) *ExecveTiming {
 }
 
 func (stt *ExecveTiming) addExeRuntime(start float64, exe string, totalSec float64) {
-
-	stt.exeRuntimes = append(stt.exeRuntimes, ExeRuntime{
-		Start:    time.Duration(start * float64(time.Second)),
+	stt.ExeRuntimes = append(stt.ExeRuntimes, ExeRuntime{
+		Start:    unixFloatSecondsToTime(start),
 		Exe:      exe,
 		TotalSec: time.Duration(totalSec * float64(time.Second)),
 	})
@@ -70,32 +79,32 @@ func (stt *ExecveTiming) addExeRuntime(start float64, exe string, totalSec float
 	}
 }
 
-// prune() ensures the number of exeRuntimes stays with the nSlowestSamples
+// prune() ensures the number of ExeRuntimes stays with the nSlowestSamples
 // limit
 func (stt *ExecveTiming) prune() {
-	for len(stt.exeRuntimes) > stt.nSlowestSamples {
+	for len(stt.ExeRuntimes) > stt.nSlowestSamples {
 		fastest := 0
-		for idx, rt := range stt.exeRuntimes {
-			if rt.TotalSec < stt.exeRuntimes[fastest].TotalSec {
+		for idx, rt := range stt.ExeRuntimes {
+			if rt.TotalSec < stt.ExeRuntimes[fastest].TotalSec {
 				fastest = idx
 			}
 		}
 		// delete fastest element
-		stt.exeRuntimes = append(stt.exeRuntimes[:fastest], stt.exeRuntimes[fastest+1:]...)
+		stt.ExeRuntimes = append(stt.ExeRuntimes[:fastest], stt.ExeRuntimes[fastest+1:]...)
 	}
 }
 
 // Display shows the final exec timing output
 func (stt *ExecveTiming) Display(w io.Writer) {
-	if len(stt.exeRuntimes) == 0 {
+	if len(stt.ExeRuntimes) == 0 {
 		return
 	}
 
-	fmt.Fprintf(w, "%d exec calls during snap run:\n", len(stt.exeRuntimes))
+	fmt.Fprintf(w, "%d exec calls during snap run:\n", len(stt.ExeRuntimes))
 	fmt.Fprintf(w, "\tStart\tStop\tElapsed\tExec\n")
 
-	sort.Slice(stt.exeRuntimes, func(i, j int) bool {
-		return stt.exeRuntimes[i].Start < stt.exeRuntimes[j].Start
+	sort.Slice(stt.ExeRuntimes, func(i, j int) bool {
+		return stt.ExeRuntimes[i].Start.Before(stt.ExeRuntimes[j].Start)
 	})
 
 	// TODO: this shows processes linearly, when really I think we want a
@@ -104,18 +113,18 @@ func (stt *ExecveTiming) Display(w io.Writer) {
 	// but note that doing so in the most generic case isn't neat since you can
 	// have processes that are forked much later than others and will be aligned
 	// with previous executables much earlier in the output
-	for _, rt := range stt.exeRuntimes {
-		relativeStart := rt.Start - stt.exeRuntimes[0].Start
+	for _, rt := range stt.ExeRuntimes {
+		relativeStart := rt.Start.Sub(stt.ExeRuntimes[0].Start)
 		fmt.Fprintf(w,
-			"\t%d\t%d\t%d\t%s\n",
+			"\t%d\t%d\t%v\t%s\n",
 			int64(relativeStart/time.Microsecond),
 			int64((relativeStart+rt.TotalSec)/time.Microsecond),
-			int64(rt.TotalSec/time.Microsecond),
+			rt.TotalSec/time.Microsecond,
 			rt.Exe,
 		)
 	}
 
-	fmt.Fprintf(w, "Total time: %2.3fs\n", stt.TotalTime)
+	fmt.Fprintln(w, "Total time: ", stt.TotalTime)
 }
 
 type childPidStart struct {
@@ -339,7 +348,7 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 			pidTracker.Del(pidString)
 		}
 	}
-	trace.TotalTime = end - start
+	trace.TotalTime = unixFloatSecondsToTime(end).Sub(unixFloatSecondsToTime(start))
 	// trace.pidChildren = pidChildTracker
 
 	if r.Err() != nil {
