@@ -222,7 +222,10 @@ func (x *cmdRun) Execute(args []string) error {
 			return errors.New("cannot use --discard-snap-ns without --use-snap-run")
 		}
 		// the name of the snap in this case is the first argument
-		discardSnapNs(x.Args.Cmd[0])
+		err := discardSnapNs(x.Args.Cmd[0])
+		if err != nil {
+			return err
+		}
 	}
 
 	// before running the final command, free the caches to get most accurate
