@@ -21,7 +21,9 @@ const sysctlBase = "/proc/sys"
 
 // Command is the command for the runner
 type Command struct {
-	Run cmdRun `command:"run" description:"Run a command"`
+	Run        cmdRun `command:"run" description:"Run a command"`
+	ShowErrors bool   `short:"e" long:"errors" description:"Show errors as they happen"`
+}
 }
 
 type cmdRun struct {
@@ -132,12 +134,21 @@ func wmctrlCloseWindow(name string) error {
 	return nil
 }
 
+var errs []error
+
+func logError(err error) {
+	errs = append(errs, err)
+	if currentCmd.ShowErrors {
+		log.Println(err)
+	}
+}
+
 func (x *cmdRun) Execute(args []string) error {
 	// run the prepare script if it's available
 	if x.PrepareScript != "" {
 		err := runScript(x.PrepareScript)
 		if err != nil {
-			log.Println(err)
+			logError(fmt.Errorf("running prepare script: %w", err))
 		}
 	}
 
@@ -266,7 +277,7 @@ func (x *cmdRun) Execute(args []string) error {
 	xtool := makeXDoTool()
 	wids, err := xtool.waitForWindow(windowspec)
 	if err != nil {
-		log.Println("error waiting for window appearance:", err)
+		logError(fmt.Errorf("waiting for window appearance: %w", err))
 		// if we don't get the wid properly then we can't try closing
 		tryXToolClose = false
 	}
@@ -281,7 +292,7 @@ func (x *cmdRun) Execute(args []string) error {
 		for i, wid := range wids {
 			pid, err := xtool.pidForWindowID(wid)
 			if err != nil {
-				log.Println("error getting pid for wid", wid, ":", err)
+				logError(fmt.Errorf("getting pid for wid %s: %w", wid, err))
 				tryWmctrl = true
 				break
 			}
@@ -292,7 +303,7 @@ func (x *cmdRun) Execute(args []string) error {
 		for _, wid := range wids {
 			err = xtool.closeWindowID(wid)
 			if err != nil {
-				log.Println("error closing window", err)
+				logError(fmt.Errorf("closing window: %w", err))
 				tryWmctrl = true
 			}
 		}
@@ -304,19 +315,17 @@ func (x *cmdRun) Execute(args []string) error {
 			if err := proc.Signal(os.Kill); err != nil {
 				// if the process already exited then try wmctrl
 				if !strings.Contains(err.Error(), "process already finished") {
-					log.Printf("failed to kill window process %d: %v\n", pid, err)
+					logError(fmt.Errorf("killing window process pid %d: %w", pid, err))
 					tryWmctrl = true
 				}
 			}
 		}
-	} else {
-		log.Println("xdotool failed to get window id so try using wmctrl")
 	}
 
 	if tryWmctrl {
 		err = wmctrlCloseWindow(x.WindowName)
 		if err != nil {
-			log.Println("failed trying to close window with wmctrl:", err)
+			logError(fmt.Errorf("closing window with wmctrl: %w", err))
 		}
 	}
 
@@ -333,7 +342,7 @@ func (x *cmdRun) Execute(args []string) error {
 			w := tabWriterGeneric(os.Stderr)
 			slg.Display(w)
 		} else {
-			log.Printf("cannot extract runtime data: %v\n", straceErr)
+			logError(fmt.Errorf("cannot extract runtime data: %w", straceErr))
 		}
 	}
 
@@ -342,7 +351,7 @@ func (x *cmdRun) Execute(args []string) error {
 	if x.RestoreScript != "" {
 		err := runScript(x.RestoreScript)
 		if err != nil {
-			log.Println(err)
+			logError(fmt.Errorf("running restore script: %w", err))
 		}
 	}
 
