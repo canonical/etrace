@@ -123,7 +123,17 @@ func discardSnapNs(snap string) error {
 // }
 
 func runScript(fname string) error {
-	out, err := exec.Command(fname).CombinedOutput()
+	path, err := exec.LookPath(fname)
+	if err != nil {
+		// try the current directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		path = filepath.Join(cwd, fname)
+	}
+	// path is either the path found with LookPath, or cwd/fname
+	out, err := exec.Command(path).CombinedOutput()
 	if err != nil {
 		log.Println(string(out))
 		log.Printf("failed to run prepare script (%s): %v", fname, err)
