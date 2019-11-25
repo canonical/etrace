@@ -57,7 +57,7 @@ func unixFloatSecondsToTime(t float64) time.Time {
 		panic(fmt.Sprintf("time %f is outside of int64 range", t))
 	}
 	startUnixSeconds := math.Floor(t)
-	startUnixNanoseconds := (t - startUnixSeconds) * float64(time.Second/time.Nanosecond)
+	startUnixNanoseconds := (t - startUnixSeconds) * float64(time.Second)
 	return time.Unix(int64(startUnixSeconds), int64(startUnixNanoseconds))
 }
 
