@@ -42,16 +42,18 @@ type Execution struct {
 }
 
 type cmdRun struct {
-	WindowName       string `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript    string `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	RestoreScript    string `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	WindowClass      string `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace          bool   `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	RunThroughSnap   bool   `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs    bool   `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog string `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog string `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	JSONOutput       bool   `short:"j" long:"json" description:"Output results in JSON"`
+	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
+	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace           bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs     bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -122,7 +124,7 @@ func discardSnapNs(snap string) error {
 // 	}
 // }
 
-func runScript(fname string) error {
+func runScript(fname string, args []string) error {
 	path, err := exec.LookPath(fname)
 	if err != nil {
 		// try the current directory
@@ -133,7 +135,7 @@ func runScript(fname string) error {
 		path = filepath.Join(cwd, fname)
 	}
 	// path is either the path found with LookPath, or cwd/fname
-	out, err := exec.Command(path).CombinedOutput()
+	out, err := exec.Command(path, args...).CombinedOutput()
 	if err != nil {
 		log.Println(string(out))
 		log.Printf("failed to run prepare script (%s): %v", fname, err)
@@ -178,7 +180,7 @@ func (x *cmdRun) Execute(args []string) error {
 	for i = 0; i < 1+currentCmd.AdditionalIterations; i++ {
 		// run the prepare script if it's available
 		if x.PrepareScript != "" {
-			err := runScript(x.PrepareScript)
+			err := runScript(x.PrepareScript, x.PrepareScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running prepare script: %w", err))
 			}
@@ -382,7 +384,7 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 
 		if x.RestoreScript != "" {
-			err := runScript(x.RestoreScript)
+			err := runScript(x.RestoreScript, x.RestoreScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running restore script: %w", err))
 			}
