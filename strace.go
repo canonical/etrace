@@ -119,7 +119,7 @@ func (stt *ExecveTiming) Display(w io.Writer) {
 			"\t%d\t%d\t%v\t%s\n",
 			int64(relativeStart/time.Microsecond),
 			int64((relativeStart+rt.TotalSec)/time.Microsecond),
-			rt.TotalSec/time.Microsecond,
+			rt.TotalSec,
 			rt.Exe,
 		)
 	}
