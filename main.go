@@ -54,6 +54,7 @@ type cmdRun struct {
 	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
 	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
 	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
+	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -278,6 +279,7 @@ func (x *cmdRun) Execute(args []string) error {
 		// err = waitForWindowStateChangeWmctrl(x.WindowName, true)
 		tryXToolClose := true
 		tryWmctrl := false
+		var wids []string
 
 		windowspec := window{}
 		// check which opts are defined
@@ -308,13 +310,18 @@ func (x *cmdRun) Execute(args []string) error {
 		start := time.Now()
 		err = cmd.Start()
 
-		// now wait until the window appears
-
-		wids, err := xtool.waitForWindow(windowspec)
-		if err != nil {
-			logError(fmt.Errorf("waiting for window appearance: %w", err))
-			// if we don't get the wid properly then we can't try closing
-			tryXToolClose = false
+		if x.NoWindowWait {
+			// if we aren't waiting on the window class, then just wait for the
+			// command to return
+			cmd.Wait()
+		} else {
+			// now wait until the window appears
+			wids, err = xtool.waitForWindow(windowspec)
+			if err != nil {
+				logError(fmt.Errorf("waiting for window appearance: %w", err))
+				// if we don't get the wid properly then we can't try closing
+				tryXToolClose = false
+			}
 		}
 
 		// save the startup time
