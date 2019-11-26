@@ -54,6 +54,7 @@ type cmdRun struct {
 	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
 	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
 	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
+	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
 	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
 
 	Args struct {
@@ -144,13 +145,34 @@ func runScript(fname string, args []string) error {
 	return err
 }
 
-func ensureFileExistsAndOpen(fname string) (*os.File, error) {
+func fileExistsQ(fname string) bool {
+	info, err := os.Stat(fname)
+	if os.IsNotExist(err) {
+		return false
+	}
+	// if err is not nil and it's not a directory then it must be a file
+	return err == nil && !info.IsDir()
+}
+
+func ensureFileExistsAndOpen(fname string, delete bool) (*os.File, error) {
 	// if the file doesn't exist, create it
-	if _, err := os.Stat(fname); os.IsNotExist(err) {
+	fExists := fileExistsQ(fname)
+	switch {
+	case fExists && !delete:
+		// open to append the file
+		return os.OpenFile(fname, os.O_WRONLY|os.O_APPEND, 0644)
+	case fExists && delete:
+		// delete the file and then fallthrough to create the file
+		err := os.Remove(fname)
+		if err != nil {
+			return nil, err
+		}
+		fallthrough
+	default:
+		// file doesn't exist or err'd stat'ing file, in which case create will
+		// also fail, but then the user can inspect the Create error for details
 		return os.Create(fname)
 	}
-	// otherwise just try to open it directly
-	return os.Open(fname)
 }
 
 func wmctrlCloseWindow(name string) error {
@@ -176,7 +198,19 @@ func logError(err error) {
 }
 
 func (x *cmdRun) Execute(args []string) error {
-	out := OutputResult{}
+	// check the output file
+	w := os.Stdout
+	if x.OutputFile != "" {
+		// TODO: add option for appending?
+		// if the file already exists, delete it and open a new file
+		file, err := ensureFileExistsAndOpen(x.OutputFile, true)
+		if err != nil {
+			return err
+		}
+		w = file
+	}
+
+	outRes := OutputResult{}
 	i := uint(0)
 	for i = 0; i < 1+currentCmd.AdditionalIterations; i++ {
 		// run the prepare script if it's available
@@ -247,7 +281,7 @@ func (x *cmdRun) Execute(args []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if x.ProgramStdoutLog != "" {
-			f, err := ensureFileExistsAndOpen(x.ProgramStdoutLog)
+			f, err := ensureFileExistsAndOpen(x.ProgramStdoutLog, false)
 			if err != nil {
 				return err
 			}
@@ -255,7 +289,7 @@ func (x *cmdRun) Execute(args []string) error {
 			cmd.Stdout = f
 		}
 		if x.ProgramStderrLog != "" {
-			f, err := ensureFileExistsAndOpen(x.ProgramStderrLog)
+			f, err := ensureFileExistsAndOpen(x.ProgramStderrLog, false)
 			if err != nil {
 				return err
 			}
@@ -382,8 +416,8 @@ func (x *cmdRun) Execute(args []string) error {
 			if straceErr == nil {
 				// make a new tabwriter to stderr
 				if !x.JSONOutput {
-					w := tabWriterGeneric(os.Stderr)
-					slg.Display(w)
+					wtab := tabWriterGeneric(w)
+					slg.Display(wtab)
 				}
 			} else {
 				logError(fmt.Errorf("cannot extract runtime data: %w", straceErr))
@@ -410,17 +444,17 @@ func (x *cmdRun) Execute(args []string) error {
 			run.TimeToRun = slg.TotalTime
 		}
 
-		out.Runs = append(out.Runs, run)
+		outRes.Runs = append(outRes.Runs, run)
 
 		if !x.JSONOutput {
-			fmt.Println("Total startup time:", startup)
+			fmt.Fprintln(w, "Total startup time:", startup)
 		}
 
 		resetErrors()
 	}
 
 	if x.JSONOutput {
-		json.NewEncoder(os.Stdout).Encode(out)
+		json.NewEncoder(w).Encode(outRes)
 	}
 
 	return nil
