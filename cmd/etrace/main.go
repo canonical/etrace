@@ -132,21 +132,6 @@ func discardSnapNs(snap string) error {
 	return err
 }
 
-// waitForWindowStateChangeWmctrl waits for a window to appear or disappear using
-// wmctrl
-// func waitForWindowStateChangeWmctrl(name string, appearing bool) error {
-// 	for {
-// 		out, err := exec.Command("wmctrl", "-l").CombinedOutput()
-// 		if err != nil {
-// 			return err
-// 		}
-// 		appears := strings.Contains(string(out), name)
-// 		if appears == appearing {
-// 			return nil
-// 		}
-// 	}
-// }
-
 func runScript(fname string, args []string) error {
 	path, err := exec.LookPath(fname)
 	if err != nil {
