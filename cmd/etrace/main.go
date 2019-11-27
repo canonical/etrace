@@ -35,12 +35,11 @@ import (
 	"time"
 
 	"github.com/anonymouse64/etrace/internal/files"
+	"github.com/anonymouse64/etrace/internal/profiling"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
 	flags "github.com/jessevdk/go-flags"
 )
-
-const sysctlBase = "/proc/sys"
 
 // Command is the command for the runner
 type Command struct {
@@ -105,53 +104,6 @@ func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
 }
 
-func freeCaches() error {
-	// it would be nice to do this from pure Go, but then we have to become root
-	// which is a hassle
-	// so just use sudo for now
-	for _, i := range []int{1, 2, 3} {
-		cmd := exec.Command("sudo", "sysctl", "-q", "vm.drop_caches="+string(i))
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Println(string(out))
-			return err
-		}
-
-		// equivalent go code that must be run as root
-		// err := ioutil.WriteFile(path.Join(sysctlBase, "vm/drop_caches"), []byte(strconv.Itoa(i)), 0640)
-	}
-	return nil
-}
-
-// discardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
-// of setting up that snap's namespace
-func discardSnapNs(snap string) error {
-	out, err := exec.Command("sudo", "/usr/lib/snapd/snap-discard-ns", snap).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-	}
-	return err
-}
-
-func runScript(fname string, args []string) error {
-	path, err := exec.LookPath(fname)
-	if err != nil {
-		// try the current directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return err
-		}
-		path = filepath.Join(cwd, fname)
-	}
-	// path is either the path found with LookPath, or cwd/fname
-	out, err := exec.Command(path, args...).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-		log.Printf("failed to run prepare script (%s): %v", fname, err)
-	}
-	return err
-}
-
 func wmctrlCloseWindow(name string) error {
 	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
 	if err != nil {
@@ -192,7 +144,7 @@ func (x *cmdRun) Execute(args []string) error {
 	for i = 0; i < 1+currentCmd.AdditionalIterations; i++ {
 		// run the prepare script if it's available
 		if x.PrepareScript != "" {
-			err := runScript(x.PrepareScript, x.PrepareScriptArgs)
+			err := profiling.RunScript(x.PrepareScript, x.PrepareScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running prepare script: %w", err))
 			}
@@ -279,7 +231,7 @@ func (x *cmdRun) Execute(args []string) error {
 				return errors.New("cannot use --discard-snap-ns without --use-snap-run")
 			}
 			// the name of the snap in this case is the first argument
-			err := discardSnapNs(x.Args.Cmd[0])
+			err := profiling.DiscardSnapNs(x.Args.Cmd[0])
 			if err != nil {
 				return err
 			}
@@ -287,7 +239,6 @@ func (x *cmdRun) Execute(args []string) error {
 
 		xtool := xdotool.MakeXDoTool()
 
-		// err = waitForWindowStateChangeWmctrl(x.WindowName, true)
 		tryXToolClose := true
 		tryWmctrl := false
 		var wids []string
@@ -312,7 +263,7 @@ func (x *cmdRun) Execute(args []string) error {
 
 		// before running the final command, free the caches to get most accurate
 		// timing
-		err := freeCaches()
+		err := profiling.FreeCaches()
 		if err != nil {
 			return err
 		}
@@ -402,7 +353,7 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 
 		if x.RestoreScript != "" {
-			err := runScript(x.RestoreScript, x.RestoreScriptArgs)
+			err := profiling.RunScript(x.RestoreScript, x.RestoreScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running restore script: %w", err))
 			}
