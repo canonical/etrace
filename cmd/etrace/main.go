@@ -34,6 +34,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anonymouse64/etrace/internal/files"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
 	flags "github.com/jessevdk/go-flags"
@@ -151,36 +152,6 @@ func runScript(fname string, args []string) error {
 	return err
 }
 
-func fileExistsQ(fname string) bool {
-	info, err := os.Stat(fname)
-	if os.IsNotExist(err) {
-		return false
-	}
-	// if err is not nil and it's not a directory then it must be a file
-	return err == nil && !info.IsDir()
-}
-
-func ensureFileExistsAndOpen(fname string, delete bool) (*os.File, error) {
-	// if the file doesn't exist, create it
-	fExists := fileExistsQ(fname)
-	switch {
-	case fExists && !delete:
-		// open to append the file
-		return os.OpenFile(fname, os.O_WRONLY|os.O_APPEND, 0644)
-	case fExists && delete:
-		// delete the file and then fallthrough to create the file
-		err := os.Remove(fname)
-		if err != nil {
-			return nil, err
-		}
-		fallthrough
-	default:
-		// file doesn't exist or err'd stat'ing file, in which case create will
-		// also fail, but then the user can inspect the Create error for details
-		return os.Create(fname)
-	}
-}
-
 func wmctrlCloseWindow(name string) error {
 	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
 	if err != nil {
@@ -209,7 +180,7 @@ func (x *cmdRun) Execute(args []string) error {
 	if x.OutputFile != "" {
 		// TODO: add option for appending?
 		// if the file already exists, delete it and open a new file
-		file, err := ensureFileExistsAndOpen(x.OutputFile, true)
+		file, err := files.EnsureExistsAndOpen(x.OutputFile, true)
 		if err != nil {
 			return err
 		}
@@ -287,7 +258,7 @@ func (x *cmdRun) Execute(args []string) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if x.ProgramStdoutLog != "" {
-			f, err := ensureFileExistsAndOpen(x.ProgramStdoutLog, false)
+			f, err := files.EnsureExistsAndOpen(x.ProgramStdoutLog, false)
 			if err != nil {
 				return err
 			}
@@ -295,7 +266,7 @@ func (x *cmdRun) Execute(args []string) error {
 			cmd.Stdout = f
 		}
 		if x.ProgramStderrLog != "" {
-			f, err := ensureFileExistsAndOpen(x.ProgramStderrLog, false)
+			f, err := files.EnsureExistsAndOpen(x.ProgramStderrLog, false)
 			if err != nil {
 				return err
 			}
@@ -450,6 +421,7 @@ func (x *cmdRun) Execute(args []string) error {
 			run.TimeToRun = slg.TotalTime
 		}
 
+		// add the run to our result
 		outRes.Runs = append(outRes.Runs, run)
 
 		if !x.JSONOutput {
