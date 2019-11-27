@@ -1,3 +1,22 @@
+// -*- Mode: Go; indent-tabs-mode: t -*-
+
+/*
+ * Copyright (C) 2019 Canonical Ltd
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 3 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
 package main
 
 import (
@@ -15,6 +34,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/anonymouse64/etrace/internal/strace"
+	"github.com/anonymouse64/etrace/internal/xdotool"
 	flags "github.com/jessevdk/go-flags"
 )
 
@@ -35,7 +56,7 @@ type OutputResult struct {
 
 // Execution represents a single run
 type Execution struct {
-	ExecveTiming  *ExecveTiming
+	ExecveTiming  *strace.ExecveTiming
 	TimeToDisplay time.Duration
 	TimeToRun     time.Duration
 	Errors        []error
@@ -229,7 +250,7 @@ func (x *cmdRun) Execute(args []string) error {
 
 		doneCh := make(chan bool, 1)
 		var straceErr error
-		var slg *ExecveTiming
+		var slg *strace.ExecveTiming
 		var cmd *exec.Cmd
 		var fw *os.File
 		if !x.NoTrace {
@@ -253,11 +274,11 @@ func (x *cmdRun) Execute(args []string) error {
 
 			// read strace data from fifo async
 			go func() {
-				slg, straceErr = TraceExecveTimings(straceLog, -1)
+				slg, straceErr = strace.TraceExecveTimings(straceLog, -1)
 				close(doneCh)
 			}()
 
-			cmd, err = TraceExecCommand(straceLog, targetCmd...)
+			cmd, err = strace.TraceExecCommand(straceLog, targetCmd...)
 			if err != nil {
 				return err
 			}
@@ -308,21 +329,21 @@ func (x *cmdRun) Execute(args []string) error {
 			}
 		}
 
-		xtool := makeXDoTool()
+		xtool := xdotool.MakeXDoTool()
 
 		// err = waitForWindowStateChangeWmctrl(x.WindowName, true)
 		tryXToolClose := true
 		tryWmctrl := false
 		var wids []string
 
-		windowspec := window{}
+		windowspec := xdotool.Window{}
 		// check which opts are defined
 		if x.WindowClass != "" {
 			// prefer window class from option
-			windowspec.class = x.WindowClass
+			windowspec.Class = x.WindowClass
 		} else if x.WindowName != "" {
 			// then window name
-			windowspec.name = x.WindowName
+			windowspec.Name = x.WindowName
 		} else {
 			// finally fall back to base cmd as the class
 			// note we use the original command and note the processed targetCmd
@@ -330,7 +351,7 @@ func (x *cmdRun) Execute(args []string) error {
 			// $ ./etrace run --use-snap chromium
 			// where targetCmd becomes []string{"snap","run","chromium"}
 			// but we still want to use "chromium" as the windowspec class
-			windowspec.class = filepath.Base(x.Args.Cmd[0])
+			windowspec.Class = filepath.Base(x.Args.Cmd[0])
 		}
 
 		// before running the final command, free the caches to get most accurate
@@ -350,7 +371,7 @@ func (x *cmdRun) Execute(args []string) error {
 			cmd.Wait()
 		} else {
 			// now wait until the window appears
-			wids, err = xtool.waitForWindow(windowspec)
+			wids, err = xtool.WaitForWindow(windowspec)
 			if err != nil {
 				logError(fmt.Errorf("waiting for window appearance: %w", err))
 				// if we don't get the wid properly then we can't try closing
@@ -366,7 +387,7 @@ func (x *cmdRun) Execute(args []string) error {
 		if tryXToolClose {
 			pids := make([]int, len(wids))
 			for i, wid := range wids {
-				pid, err := xtool.pidForWindowID(wid)
+				pid, err := xtool.PidForWindowID(wid)
 				if err != nil {
 					logError(fmt.Errorf("getting pid for wid %s: %w", wid, err))
 					tryWmctrl = true
@@ -377,7 +398,7 @@ func (x *cmdRun) Execute(args []string) error {
 
 			// close the windows
 			for _, wid := range wids {
-				err = xtool.closeWindowID(wid)
+				err = xtool.CloseWindowID(wid)
 				if err != nil {
 					logError(fmt.Errorf("closing window: %w", err))
 					tryWmctrl = true
