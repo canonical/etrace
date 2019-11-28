@@ -51,3 +51,11 @@ func EnsureExistsAndOpen(fname string, delete bool) (*os.File, error) {
 		return os.Create(fname)
 	}
 }
+
+// EnsureFileIsDeleted ensures the file doesn't exist
+func EnsureFileIsDeleted(fname string) error {
+	if fileExistsQ(fname) {
+		return os.Remove(fname)
+	}
+	return nil
+}
