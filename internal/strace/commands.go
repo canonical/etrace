@@ -68,3 +68,34 @@ func TraceExecCommand(straceLogPath string, origCmd ...string) (*exec.Cmd, error
 
 	return straceCommand(extraStraceOpts, origCmd...)
 }
+
+// TraceFilesCommand returns an exec.Cmd suitable for tracking files opened/used
+// during execution
+func TraceFilesCommand(straceLogPattern string, origCmd ...string) (*exec.Cmd, error) {
+	extraStraceOpts := []string{
+		// we don't need timing info here, but we need to re-merge the
+		// logs, with strace-log-merge, and to work across day changes, this is
+		// recommended
+		"-ttt",
+		// this is to make parsing easier since we don't care about time
+		// performance, splitting the output up by process ensures that we will
+		// never get output that has a syscall interrupted which is hard to
+		// match and parse properly
+		"-ff",
+		// we don't care about the file contents, we also specifically don't
+		// want to get confused if a given read() or write() has the filepath we
+		// care about in the content being written, so just don't show any at
+		//all
+		"-s0",
+		// we also want to capture things accessing file descriptors too, so
+		// this makes the strace output append </path/to/file/or/dir> wherever
+		// a file descriptor shows up
+		"-y",
+		// this is not a filename, it's a pattern that strace will use, the
+		// actual filenames will have their pid appended to this filename in a
+		// way that strace-log-merge can understand easily
+		"-o", fmt.Sprintf("%s", straceLogPattern),
+	}
+
+	return straceCommand(extraStraceOpts, origCmd...)
+}
