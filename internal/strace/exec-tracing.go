@@ -1,5 +1,3 @@
-// -*- Mode: Go; indent-tabs-mode: t -*-
-
 /*
  * Copyright (C) 2019 Canonical Ltd
  *
@@ -25,8 +23,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"os/exec"
-	"os/user"
 	"regexp"
 	"sort"
 	"strconv"
@@ -38,6 +34,7 @@ type ExeRuntime struct {
 	Start    time.Time
 	Exe      string
 	TotalSec time.Duration
+	pid      string
 }
 
 // ExecveTiming measures the execve calls timings under strace. This is
@@ -47,12 +44,23 @@ type ExecveTiming struct {
 	ExeRuntimes []ExeRuntime
 	indent      string
 
-	pidChildren *pidChildTracker
+	// pidChildren *pidChildTracker
 
 	nSlowestSamples int
+
+	*pidTracker
+}
+
+type execveTimingTracer interface {
+	addExeRuntime(start float64, exe string, totalSec float64, pid string)
+
+	getPid(pid string) (startTime float64, exe string)
+	addPid(pid string, startTime float64, exe string)
+	deletePid(pid string)
 }
 
 func unixFloatSecondsToTime(t float64) time.Time {
+	// check to make sure the time isn't outside of the bounds of an int64
 	if t > math.MaxInt64 || t < math.MinInt64 {
 		panic(fmt.Sprintf("time %f is outside of int64 range", t))
 	}
@@ -61,18 +69,21 @@ func unixFloatSecondsToTime(t float64) time.Time {
 	return time.Unix(int64(startUnixSeconds), int64(startUnixNanoseconds))
 }
 
-// NewExecveTiming returns a new ExecveTiming struct that keeps
+// newExecveTiming returns a new ExecveTiming struct that keeps
 // the given amount of the slowest exec samples.
 // if nSlowestSamples is equal to 0, all exec samples are kept
-func NewExecveTiming(nSlowestSamples int) *ExecveTiming {
-	return &ExecveTiming{nSlowestSamples: nSlowestSamples}
+func newExecveTiming(nSlowestSamples int) *ExecveTiming {
+	e := &ExecveTiming{nSlowestSamples: nSlowestSamples}
+	e.pidTracker = newpidTracker()
+	return e
 }
 
-func (stt *ExecveTiming) addExeRuntime(start float64, exe string, totalSec float64) {
+func (stt *ExecveTiming) addExeRuntime(start float64, exe string, totalSec float64, pid string) {
 	stt.ExeRuntimes = append(stt.ExeRuntimes, ExeRuntime{
 		Start:    unixFloatSecondsToTime(start),
 		Exe:      exe,
 		TotalSec: time.Duration(totalSec * float64(time.Second)),
+		pid:      pid,
 	})
 	if stt.nSlowestSamples > 0 {
 		stt.prune()
@@ -127,58 +138,6 @@ func (stt *ExecveTiming) Display(w io.Writer) {
 	fmt.Fprintln(w, "Total time: ", stt.TotalTime)
 }
 
-type childPidStart struct {
-	start float64
-	pid   string
-}
-
-type pidChildTracker struct {
-	pidToChildrenPIDs map[string][]childPidStart
-}
-
-func newPidChildTracker() *pidChildTracker {
-	return &pidChildTracker{
-		pidToChildrenPIDs: make(map[string][]childPidStart),
-	}
-}
-
-func (pct *pidChildTracker) Add(pid string, child string, start float64) {
-	if _, ok := pct.pidToChildrenPIDs[pid]; !ok {
-		pct.pidToChildrenPIDs[pid] = []childPidStart{}
-	}
-	pct.pidToChildrenPIDs[pid] = append(pct.pidToChildrenPIDs[pid], childPidStart{start: start, pid: child})
-}
-
-type exeStart struct {
-	start float64
-	exe   string
-}
-
-type pidTracker struct {
-	pidToExeStart map[string]exeStart
-}
-
-func newPidTracker() *pidTracker {
-	return &pidTracker{
-		pidToExeStart: make(map[string]exeStart),
-	}
-}
-
-func (pt *pidTracker) Get(pid string) (startTime float64, exe string) {
-	if exeStart, ok := pt.pidToExeStart[pid]; ok {
-		return exeStart.start, exeStart.exe
-	}
-	return 0, ""
-}
-
-func (pt *pidTracker) Add(pid string, startTime float64, exe string) {
-	pt.pidToExeStart[pid] = exeStart{start: startTime, exe: exe}
-}
-
-func (pt *pidTracker) Del(pid string) {
-	delete(pt.pidToExeStart, pid)
-}
-
 // TODO: can execve calls be "interrupted" like clone() below?
 // lines look like:
 // PID   TIME              SYSCALL
@@ -200,27 +159,37 @@ var sigChldTermRE = regexp.MustCompile(`[0-9]+\ +([0-9.]+).*SIG(CHLD|TERM)\ {.*s
 // 20882 1573257274.988650 +++ killed by SIGKILL +++
 var sigkillRE = regexp.MustCompile(`([0-9]+)\ +([0-9.]+) \+\+\+ killed by SIGKILL \+\+\+`)
 
-func handleExecMatch(trace *ExecveTiming, pt *pidTracker, match []string) error {
+// this is a silly function but de-duplicates the code
+func parsePIDAndReturnOthers(match []string) (string, float64, string, error) {
+	execStart, err := strconv.ParseFloat(match[2], 64)
+	if err != nil {
+		return "", 0, "", err
+	}
+	// for all matches, match[1] is the pid and match[2] is the time
+	// for execve matches, match[3] is the exe
+	// for file matches, match[3] is the syscall
+	return match[1], execStart, match[3], nil
+}
+
+func handleExecMatch(trace execveTimingTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
-	// the pid of the process that does the execve{,at}()
-	pid := match[1]
-	execStart, err := strconv.ParseFloat(match[2], 64)
+
+	pid, execStart, exe, err := parsePIDAndReturnOthers(match)
 	if err != nil {
 		return err
 	}
-	exe := match[3]
 
 	// deal with subsequent execve()
-	if start, exe := pt.Get(pid); exe != "" {
-		trace.addExeRuntime(start, exe, execStart-start)
+	if start, exe := trace.getPid(pid); exe != "" {
+		trace.addExeRuntime(start, exe, execStart-start, pid)
 	}
-	pt.Add(pid, execStart, exe)
+	trace.addPid(pid, execStart, exe)
 	return nil
 }
 
-func handleSignalMatch(trace *ExecveTiming, pt *pidTracker, match []string) error {
+func handleSignalMatch(trace execveTimingTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -230,14 +199,14 @@ func handleSignalMatch(trace *ExecveTiming, pt *pidTracker, match []string) erro
 	}
 	sigPid := match[3]
 
-	if start, exe := pt.Get(sigPid); exe != "" {
-		trace.addExeRuntime(start, exe, sigTime-start)
-		pt.Del(sigPid)
+	if start, exe := trace.getPid(sigPid); exe != "" {
+		trace.addExeRuntime(start, exe, sigTime-start, sigPid)
+		trace.deletePid(sigPid)
 	}
 	return nil
 }
 
-func handleSigkillMatch(trace *ExecveTiming, pt *pidTracker, match []string) error {
+func handleSigkillMatch(trace execveTimingTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -247,31 +216,31 @@ func handleSigkillMatch(trace *ExecveTiming, pt *pidTracker, match []string) err
 		return err
 	}
 
-	if start, exe := pt.Get(pid); exe != "" {
-		trace.addExeRuntime(start, exe, sigTime-start)
-		pt.Del(pid)
+	if start, exe := trace.getPid(pid); exe != "" {
+		trace.addExeRuntime(start, exe, sigTime-start, pid)
+		trace.deletePid(pid)
 	}
 	return nil
 }
 
-func handleCloneMatch(trace *ExecveTiming, pct *pidChildTracker, match []string) error {
-	if len(match) == 0 {
-		return nil
-	}
-	// the pid of the parent process clone()ing a new child
-	ppid := match[1]
+// func handleCloneMatch(trace *ExecveTiming, pct *pidChildTracker, match []string) error {
+// 	if len(match) == 0 {
+// 		return nil
+// 	}
+// 	// the pid of the parent process clone()ing a new child
+// 	ppid := match[1]
 
-	// the time the child was created
-	execStart, err := strconv.ParseFloat(match[2], 64)
-	if err != nil {
-		return err
-	}
+// 	// the time the child was created
+// 	execStart, err := strconv.ParseFloat(match[2], 64)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// the pid of the new child
-	pid := match[3]
-	pct.Add(ppid, pid, execStart)
-	return nil
-}
+// 	// the pid of the new child
+// 	pid := match[3]
+// 	pct.Add(ppid, pid, execStart)
+// 	return nil
+// }
 
 // TraceExecveTimings will read an strace log and produce a timing report of the
 // n slowest exec's
@@ -282,15 +251,12 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 	}
 	defer slog.Close()
 
-	// pidTracker maps the "pid" string to the executable
-	pidTracker := newPidTracker()
-
 	// pidChildTracker := newPidChildTracker()
 
 	var line string
 	var start, end float64
 	var startPID, endPID int
-	trace := NewExecveTiming(nSlowest)
+	trace := newExecveTiming(nSlowest)
 	r := bufio.NewScanner(slog)
 	for r.Scan() {
 		line = r.Text()
@@ -312,11 +278,11 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 		//    pid 20817 execve("/bin/sh")
 		//    pid 2023  execve("/bin/true")
 		match := execveRE.FindStringSubmatch(line)
-		if err := handleExecMatch(trace, pidTracker, match); err != nil {
+		if err := handleExecMatch(trace, match); err != nil {
 			return nil, err
 		}
 		match = execveatRE.FindStringSubmatch(line)
-		if err := handleExecMatch(trace, pidTracker, match); err != nil {
+		if err := handleExecMatch(trace, match); err != nil {
 			return nil, err
 		}
 		// handleSignalMatch looks for SIG{CHLD,TERM} signals and
@@ -324,7 +290,7 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 		// of the terminating PID to calculate the total time of
 		// an execve{,at}() call.
 		match = sigChldTermRE.FindStringSubmatch(line)
-		if err := handleSignalMatch(trace, pidTracker, match); err != nil {
+		if err := handleSignalMatch(trace, match); err != nil {
 			return nil, err
 		}
 
@@ -332,7 +298,7 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 		// the time that SIGKILL happens to calculate the total time of an
 		// execve{,at}() call.
 		match = sigkillRE.FindStringSubmatch(line)
-		if err := handleSigkillMatch(trace, pidTracker, match); err != nil {
+		if err := handleSigkillMatch(trace, match); err != nil {
 			return nil, err
 		}
 	}
@@ -340,76 +306,19 @@ func TraceExecveTimings(straceLog string, nSlowest int) (*ExecveTiming, error) {
 		return nil, fmt.Errorf("cannot parse end of exec profile: %s", err)
 	}
 
-	// handle processes which don't execute anything
+	// handle processes which don't execve{,at} at all
 	if startPID == endPID {
 		pidString := strconv.Itoa(startPID)
-		if start, exe := pidTracker.Get(pidString); exe != "" {
-			trace.addExeRuntime(start, exe, end-start)
-			pidTracker.Del(pidString)
+		if start, exe := trace.getPid(pidString); exe != "" {
+			trace.addExeRuntime(start, exe, end-start, pidString)
+			trace.deletePid(pidString)
 		}
 	}
 	trace.TotalTime = unixFloatSecondsToTime(end).Sub(unixFloatSecondsToTime(start))
-	// trace.pidChildren = pidChildTracker
 
 	if r.Err() != nil {
 		return nil, r.Err()
 	}
 
 	return trace, nil
-}
-
-// These syscalls are excluded because they make strace hang on all or
-// some architectures (gettimeofday on arm64).
-var excludedSyscalls = "!select,pselect6,_newselect,clock_gettime,sigaltstack,gettid,gettimeofday,nanosleep"
-
-// Command returns how to run strace in the users context with the
-// right set of excluded system calls.
-func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, error) {
-	current, err := user.Current()
-	if err != nil {
-		return nil, err
-	}
-	sudoPath, err := exec.LookPath("sudo")
-	if err != nil {
-		return nil, fmt.Errorf("cannot use strace without sudo: %s", err)
-	}
-
-	// Try strace from the snap first, we use new syscalls like
-	// "_newselect" that are known to not work with the strace of e.g.
-	// ubuntu 14.04.
-	//
-	// TODO: some architectures do not have some syscalls (e.g.
-	// s390x does not have _newselect). In
-	// https://github.com/strace/strace/issues/57 options are
-	// discussed.  We could use "-e trace=?syscall" but that is
-	// only available since strace 4.17 which is not even in
-	// ubutnu 17.10.
-	stracePath, err := exec.LookPath("strace")
-	if err != nil {
-		return nil, fmt.Errorf("cannot find an installed strace, please try 'snap install strace-static'")
-	}
-
-	args := []string{
-		sudoPath,
-		"-E",
-		stracePath,
-		"-u", current.Username,
-		"-f",
-		"-e", excludedSyscalls,
-	}
-	args = append(args, extraStraceOpts...)
-	args = append(args, traceeCmd...)
-
-	return &exec.Cmd{
-		Path: sudoPath,
-		Args: args,
-	}, nil
-}
-
-// TraceExecCommand returns an exec.Cmd suitable for tracking timings of
-// execve{,at}() calls
-func TraceExecCommand(straceLogPath string, origCmd ...string) (*exec.Cmd, error) {
-	extraStraceOpts := []string{"-ttt", "-e", "trace=execve,execveat", "-o", fmt.Sprintf("%s", straceLogPath)}
-
-	return straceCommand(extraStraceOpts, origCmd...)
 }
