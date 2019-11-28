@@ -43,16 +43,6 @@ func FreeCaches() error {
 	return nil
 }
 
-// DiscardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
-// of setting up that snap's namespace
-func DiscardSnapNs(snap string) error {
-	out, err := exec.Command("sudo", "/usr/lib/snapd/snap-discard-ns", snap).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-	}
-	return err
-}
-
 // RunScript will run the specified script with args, trying both a script on
 // $PATH, as well as from the current working directory for easy
 // scripting/measurement from the command line without large paths as arguments
