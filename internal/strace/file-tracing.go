@@ -182,7 +182,7 @@ func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
 	return nil
 }
 
-func handleFdAndPathMatch(trace execvePathsTracer, match []string, desiredPathes []string) error {
+func handleFdAndPathMatch(trace execvePathsTracer, match []string, rootMatchingPaths []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -196,8 +196,8 @@ func handleFdAndPathMatch(trace execvePathsTracer, match []string, desiredPathes
 	// join the fd + path and see if it matches
 	candPath := filepath.Join(match[4], match[5])
 
-	for _, path := range desiredPathes {
-		if strings.HasPrefix(candPath, path) {
+	for _, rootPath := range rootMatchingPaths {
+		if strings.HasPrefix(candPath, rootPath) {
 			trace.addProcessPathAccess(
 				PathAccess{
 					Time:    unixFloatSecondsToTime(execStart),
@@ -322,13 +322,12 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 		),
 	)
 
-	// paths that files could show up underneath for the fd + path regex
-	desiredPaths := []string{
+	// paths that files could show up underneath for the fd + path regex, use
+	// both current symlink and the absolute path with the revision
+	rootMatchingPaths := []string{
 		filepath.Join("/", "snap", snapName, snapRevision),
 		filepath.Join("/", "snap", snapName, "current"),
 	}
-
-	fmt.Println("desiredPaths", desiredPaths)
 
 	// start scanning the file
 	var line string
@@ -395,7 +394,7 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 		// if that match is successful then we just skip the last check and
 		// continue to the next line
 		match = fdAndPathRE.FindStringSubmatch(line)
-		if err := handleFdAndPathMatch(trace, match, desiredPaths); err != nil {
+		if err := handleFdAndPathMatch(trace, match, rootMatchingPaths); err != nil {
 			return nil, err
 		}
 
