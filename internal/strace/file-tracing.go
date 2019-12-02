@@ -407,6 +407,14 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 			return nil, err
 		}
 	}
+
+	// check scanning error
+	if r.Err() != nil {
+		return nil, r.Err()
+	}
+
+	// scan the last line to see if it matches the end line to compare with the
+	// start
 	if _, err := fmt.Sscanf(line, "%v %f", &endPID, &end); err != nil {
 		return nil, fmt.Errorf("cannot parse end of exec profile: %s", err)
 	}
@@ -455,10 +463,6 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 
 	// free up path file set memory
 	trace.allFilesSet = nil
-
-	if r.Err() != nil {
-		return nil, r.Err()
-	}
 
 	return trace, nil
 }
