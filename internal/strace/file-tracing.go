@@ -262,7 +262,8 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 
 	err = cmd.Run()
 	if err != nil {
-		// _, err = mergedFile.Seek(0, 0)
+		// if we failed to run strace-log-merge, check the file we redirected
+		// stdout to, since otherwise we don't know how it failed
 		mergedFile.Close()
 		out, err2 := ioutil.ReadFile(straceLogPattern)
 		if err2 != nil {
