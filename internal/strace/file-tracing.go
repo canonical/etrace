@@ -280,48 +280,17 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 		return nil, err
 	}
 
+	// helper lambda function to compile snap specific regular expressions
+	replaceSnapStringsAndCompileRegExp := func(s string) *regexp.Regexp {
+		s = strings.Replace(s, "SNAP_NAME", snapName, 1)
+		s = strings.Replace(s, "SNAP_REVISION", snapRevision, 1)
+		return regexp.MustCompile(s)
+	}
+
 	// build the snap name + revision specific regex's
-	absPathWithCWDRE := regexp.MustCompile(
-		strings.Replace(
-			strings.Replace(
-				absPathWithCWDString,
-				"SNAP_NAME",
-				snapName,
-				1,
-			),
-			"SNAP_REVISION",
-			snapRevision,
-			1,
-		),
-	)
-
-	absPathRE := regexp.MustCompile(
-		strings.Replace(
-			strings.Replace(
-				absPathString,
-				"SNAP_NAME",
-				snapName,
-				1,
-			),
-			"SNAP_REVISION",
-			snapRevision,
-			1,
-		),
-	)
-
-	fdRE := regexp.MustCompile(
-		strings.Replace(
-			strings.Replace(
-				fdString,
-				"SNAP_NAME",
-				snapName,
-				1,
-			),
-			"SNAP_REVISION",
-			snapRevision,
-			1,
-		),
-	)
+	absPathWithCWDRE := replaceSnapStringsAndCompileRegExp(absPathWithCWDString)
+	absPathRE := replaceSnapStringsAndCompileRegExp(absPathString)
+	fdRE := replaceSnapStringsAndCompileRegExp(fdString)
 
 	// paths that files could show up underneath for the fd + path regex, use
 	// both current symlink and the absolute path with the revision
