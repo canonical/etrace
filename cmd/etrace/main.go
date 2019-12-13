@@ -34,6 +34,7 @@ import (
 
 	"github.com/anonymouse64/etrace/internal/files"
 	"github.com/anonymouse64/etrace/internal/profiling"
+	"github.com/anonymouse64/etrace/internal/snaps"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
 	flags "github.com/jessevdk/go-flags"
@@ -229,7 +230,7 @@ func (x *cmdRun) Execute(args []string) error {
 				return errors.New("cannot use --discard-snap-ns without --use-snap-run")
 			}
 			// the name of the snap in this case is the first argument
-			err := profiling.DiscardSnapNs(x.Args.Cmd[0])
+			err := snaps.DiscardSnapNs(x.Args.Cmd[0])
 			if err != nil {
 				return err
 			}
