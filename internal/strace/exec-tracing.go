@@ -142,12 +142,12 @@ func (stt *ExecveTiming) Display(w io.Writer) {
 // lines look like:
 // PID   TIME              SYSCALL
 // 17363 1542815326.700248 execve("/snap/brave/44/usr/bin/update-mime-database", ["update-mime-database", "/home/egon/snap/brave/44/.local/"...], 0x1566008 /* 69 vars */) = 0
-var execveRE = regexp.MustCompile(`([0-9]+)\ +([0-9.]+) execve\(\"([^"]+)\"`)
+var execveRE = regexp.MustCompile(`([0-9]+)\ +([0-9.]+) execve\(\"([^"]+)\".*\) = 0`)
 
 // lines look like:
 // PID   TIME              SYSCALL
 // 14157 1542875582.816782 execveat(3, "", ["snap-update-ns", "--from-snap-confine", "test-snapd-tools"], 0x7ffce7dd6160 /* 0 vars */, AT_EMPTY_PATH) = 0
-var execveatRE = regexp.MustCompile(`([0-9]+)\ +([0-9.]+) execveat\(.*\["([^"]+)"`)
+var execveatRE = regexp.MustCompile(`([0-9]+)\ +([0-9.]+) execveat\(.*\["([^"]+)".*\) = 0`)
 
 // lines look like (both SIGTERM and SIGCHLD need to be handled):
 // PID   TIME                  SIGNAL
