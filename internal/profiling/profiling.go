@@ -24,6 +24,11 @@ import (
 	"path/filepath"
 )
 
+// helper function to make testing easier
+var execCommandCombinedOutput = func(prog string, args ...string) ([]byte, error) {
+	return exec.Command(prog, args...).CombinedOutput()
+}
+
 // FreeCaches will drop caches in the kernel for the most accurate measurements
 func FreeCaches() error {
 	// it would be nice to do this from pure Go, but then we have to become root
@@ -31,8 +36,7 @@ func FreeCaches() error {
 	// calling user, which means we need to do setuid or user priv dropping ...
 	// so just use sudo for now
 	for _, i := range []int{1, 2, 3} {
-		cmd := exec.Command("sudo", "sysctl", "-q", "vm.drop_caches="+string(i))
-		out, err := cmd.CombinedOutput()
+		out, err := execCommandCombinedOutput("sudo", "sysctl", "-q", "vm.drop_caches="+string(i))
 		if err != nil {
 			log.Println(string(out))
 			return err
@@ -58,10 +62,6 @@ func RunScript(fname string, args []string) error {
 		path = filepath.Join(cwd, fname)
 	}
 	// path is either the path found with LookPath, or cwd/fname
-	out, err := exec.Command(path, args...).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-		log.Printf("failed to run prepare script (%s): %v", fname, err)
-	}
+	_, err = execCommandCombinedOutput(path, args...)
 	return err
 }
