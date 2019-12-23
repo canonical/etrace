@@ -27,7 +27,8 @@ import (
 // FreeCaches will drop caches in the kernel for the most accurate measurements
 func FreeCaches() error {
 	// it would be nice to do this from pure Go, but then we have to become root
-	// which is a hassle
+	// which is a hassle because we want to run the actual program as the
+	// calling user, which means we need to do setuid or user priv dropping ...
 	// so just use sudo for now
 	for _, i := range []int{1, 2, 3} {
 		cmd := exec.Command("sudo", "sysctl", "-q", "vm.drop_caches="+string(i))
@@ -37,8 +38,8 @@ func FreeCaches() error {
 			return err
 		}
 
-		// equivalent go code that must be run as root
-		// err := ioutil.WriteFile(path.Join("/proc/sys", "vm/drop_caches"), []byte(strconv.Itoa(i)), 0640)
+		// equivalent go code that must be run as root someday
+		// err := ioutil.WriteFile("/proc/sys/vm/drop_caches", []byte(strconv.Itoa(i)), 0640)
 	}
 	return nil
 }
