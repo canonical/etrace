@@ -24,7 +24,6 @@ import (
 
 	"github.com/anonymouse64/etrace/internal/files"
 	"github.com/anonymouse64/etrace/internal/profiling"
-
 	"gopkg.in/check.v1"
 )
 
