@@ -6,3 +6,5 @@
 old-data/
 snap-repository/
 data-testrun-*/
+
+.vscode/
