@@ -276,17 +276,21 @@ func (x *cmdRun) Execute(args []string) error {
 		start := time.Now()
 		err = cmd.Start()
 
-		if x.NoWindowWait {
-			// if we aren't waiting on the window class, then just wait for the
-			// command to return
-			cmd.Wait()
-		} else {
+		if !x.NoWindowWait {
 			// now wait until the window appears
 			wids, err = xtool.WaitForWindow(windowspec)
 			if err != nil {
 				logError(fmt.Errorf("waiting for window appearance: %w", err))
 				// if we don't get the wid properly then we can't try closing
 				tryXToolClose = false
+			}
+		}
+
+		if x.NoWindowWait || len(wids) == 0 {
+			// if we aren't waiting on the window class, then just wait for the
+			// command to return
+			if err := cmd.Wait(); err != nil {
+				logError(fmt.Errorf("waiting for command: %w", err))
 			}
 		}
 
