@@ -125,6 +125,11 @@ func logError(err error) {
 	}
 }
 
+type straceResult struct {
+	timings *strace.ExecveTiming
+	err     error
+}
+
 func (x *cmdRun) Execute(args []string) error {
 	// check the output file
 	w := os.Stdout
@@ -155,8 +160,7 @@ func (x *cmdRun) Execute(args []string) error {
 			targetCmd = append([]string{"snap", "run"}, targetCmd...)
 		}
 
-		doneCh := make(chan bool, 1)
-		var straceErr error
+		doneCh := make(chan straceResult, 1)
 		var slg *strace.ExecveTiming
 		var cmd *exec.Cmd
 		var fw *os.File
@@ -181,7 +185,8 @@ func (x *cmdRun) Execute(args []string) error {
 
 			// read strace data from fifo async
 			go func() {
-				slg, straceErr = strace.TraceExecveTimings(straceLog, -1)
+				timing, err := strace.TraceExecveTimings(straceLog, -1)
+				doneCh <- straceResult{timings: timing, err: err}
 				close(doneCh)
 			}()
 
@@ -339,15 +344,17 @@ func (x *cmdRun) Execute(args []string) error {
 			fw.Close()
 
 			// wait for strace reader
-			<-doneCh
-			if straceErr == nil {
+			straceRes := <-doneCh
+			if straceRes.err == nil {
+				slg = straceRes.timings
 				// make a new tabwriter to stderr
 				if !x.JSONOutput {
 					wtab := tabWriterGeneric(w)
 					slg.Display(wtab)
 				}
 			} else {
-				logError(fmt.Errorf("cannot extract runtime data: %w", straceErr))
+				logError(fmt.Errorf("cannot extract runtime data: %w", straceRes.err))
+				return straceRes.err
 			}
 		}
 
