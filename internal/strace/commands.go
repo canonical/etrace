@@ -30,13 +30,21 @@ var excludedSyscalls = "!select,pselect6,_newselect,clock_gettime,sigaltstack,ge
 // Command returns how to run strace in the users context with the
 // right set of excluded system calls.
 func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, error) {
+	args := []string{}
+
 	current, err := user.Current()
 	if err != nil {
 		return nil, err
 	}
-	sudoPath, err := exec.LookPath("sudo")
-	if err != nil {
-		return nil, fmt.Errorf("cannot use strace without sudo: %s", err)
+	if current.Uid != "0" {
+		sudoPath, err := exec.LookPath("sudo")
+		if err != nil {
+			return nil, fmt.Errorf("cannot use strace without sudo: %s", err)
+		}
+		args = append(args,
+			sudoPath,
+			"-E",
+		)
 	}
 
 	stracePath, err := exec.LookPath("strace")
@@ -44,19 +52,17 @@ func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, er
 		return nil, fmt.Errorf("cannot find an installed strace, please try 'snap install strace-static'")
 	}
 
-	args := []string{
-		sudoPath,
-		"-E",
+	args = append(args,
 		stracePath,
 		"-u", current.Username,
 		"-f",
 		"-e", excludedSyscalls,
-	}
+	)
 	args = append(args, extraStraceOpts...)
 	args = append(args, traceeCmd...)
 
 	return &exec.Cmd{
-		Path: sudoPath,
+		Path: args[0],
 		Args: args,
 	}, nil
 }
