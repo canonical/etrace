@@ -17,32 +17,12 @@
 
 package commands
 
-import (
-	"fmt"
-	"os/exec"
-	"os/user"
-)
+import "os/user"
 
-var userCurrent = user.Current
-
-// AddSudoIfNeeded will prefix the given exec.Cmd with sudo if the current user
-// is not root.
-func AddSudoIfNeeded(cmd *exec.Cmd, sudoArgs ...string) error {
-	current, err := userCurrent()
-	if err != nil {
-		return err
+func MockUserCurrent(new func() (*user.User, error)) (restore func()) {
+	old := userCurrent
+	userCurrent = new
+	return func() {
+		userCurrent = old
 	}
-	if current.Uid != "0" {
-		sudoPath, err := exec.LookPath("sudo")
-		if err != nil {
-			return fmt.Errorf("cannot use strace without running as root or without sudo: %s", err)
-		}
-
-		// prepend the command with sudo and any sudo args
-		cmd.Args = append(
-			append([]string{sudoPath}, sudoArgs...),
-			cmd.Args...,
-		)
-	}
-	return nil
 }
