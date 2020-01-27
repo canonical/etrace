@@ -70,7 +70,14 @@ func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, er
 // TraceExecCommand returns an exec.Cmd suitable for tracking timings of
 // execve{,at}() calls
 func TraceExecCommand(straceLogPath string, origCmd ...string) (*exec.Cmd, error) {
-	extraStraceOpts := []string{"-ttt", "-e", "trace=execve,execveat", "-o", fmt.Sprintf("%s", straceLogPath)}
+	extraStraceOpts := []string{
+		// we want maximum timing accuracy for measuring exec's
+		"-ttt",
+		// only trace the execve syscalls
+		"-e", "trace=execve,execveat",
+		// the output file to use (this is usually a fifo for best performance)
+		"-o", straceLogPath,
+	}
 
 	return straceCommand(extraStraceOpts, origCmd...)
 }
@@ -90,17 +97,19 @@ func TraceFilesCommand(straceLogPattern string, origCmd ...string) (*exec.Cmd, e
 		"-ff",
 		// we don't care about the file contents, we also specifically don't
 		// want to get confused if a given read() or write() has the filepath we
-		// care about in the content being written, so just don't show any at
-		//all
+		// care about in the content being written or read, so just don't show
+		// any strings
 		"-s0",
 		// we also want to capture things accessing file descriptors too, so
 		// this makes the strace output append </path/to/file/or/dir> wherever
 		// a file descriptor shows up
 		"-y",
-		// this is not a filename, it's a pattern that strace will use, the
-		// actual filenames will have their pid appended to this filename in a
-		// way that strace-log-merge can understand easily
-		"-o", fmt.Sprintf("%s", straceLogPattern),
+		// since we also specify the "ff" option, this is not a verbatim
+		// filename that strace outputs to, it's now used as a pattern that
+		// strace will use to create the actual filenames, with the pid for each
+		// appended to the pattern - this is consistent with how
+		// strace-log-merge expects the files to be named
+		"-o", straceLogPattern,
 	}
 
 	return straceCommand(extraStraceOpts, origCmd...)
