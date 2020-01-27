@@ -19,11 +19,14 @@ package snaps
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
-	"strings"
+	"path/filepath"
 
 	"github.com/anonymouse64/etrace/internal/commands"
 )
+
+var snapRoot = "/snap"
 
 // DiscardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
 // of setting up that snap's namespace
@@ -42,9 +45,11 @@ func DiscardSnapNs(snap string) error {
 
 // Revision returns the revision of the snap
 func Revision(snap string) (string, error) {
-	out, err := exec.Command("snap", "run", "--shell", snap, "-c", "echo $SNAP_REVISION").CombinedOutput()
-	if err != nil {
-		return "", nil
+	snapDir := filepath.Join(snapRoot, snap)
+	// make sure the snap dir for this snap exists
+	if _, err := os.Stat(snapDir); os.IsNotExist(err) {
+		return "", fmt.Errorf("no such snap: %s", snap)
 	}
-	return strings.TrimSpace(string(out)), err
+	// get the revision by reading the "current" link in /snap/$SNAP_NAME
+	return os.Readlink(filepath.Join(snapDir, "current"))
 }
