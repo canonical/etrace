@@ -18,19 +18,26 @@
 package snaps
 
 import (
-	"log"
+	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/anonymouse64/etrace/internal/commands"
 )
 
 // DiscardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
 // of setting up that snap's namespace
 func DiscardSnapNs(snap string) error {
-	out, err := exec.Command("sudo", "/usr/lib/snapd/snap-discard-ns", snap).CombinedOutput()
+	cmd := exec.Command("/usr/lib/snapd/snap-discard-ns", snap)
+	err := commands.AddSudoIfNeeded(cmd)
 	if err != nil {
-		log.Println(string(out))
+		return err
 	}
-	return err
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run snap-discard-ns: %v (output: %s)", err, string(out))
+	}
+	return nil
 }
 
 // Revision returns the revision of the snap

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os/exec"
 	"os/user"
+
+	"github.com/anonymouse64/etrace/internal/commands"
 )
 
 // These syscalls are excluded because they make strace hang on all or
@@ -30,21 +32,9 @@ var excludedSyscalls = "!select,pselect6,_newselect,clock_gettime,sigaltstack,ge
 // Command returns how to run strace in the users context with the
 // right set of excluded system calls.
 func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, error) {
-	args := []string{}
-
 	current, err := user.Current()
 	if err != nil {
 		return nil, err
-	}
-	if current.Uid != "0" {
-		sudoPath, err := exec.LookPath("sudo")
-		if err != nil {
-			return nil, fmt.Errorf("cannot use strace without sudo: %s", err)
-		}
-		args = append(args,
-			sudoPath,
-			"-E",
-		)
 	}
 
 	stracePath, err := exec.LookPath("strace")
@@ -52,19 +42,25 @@ func straceCommand(extraStraceOpts []string, traceeCmd ...string) (*exec.Cmd, er
 		return nil, fmt.Errorf("cannot find an installed strace, please try 'snap install strace-static'")
 	}
 
-	args = append(args,
+	args := []string{
 		stracePath,
 		"-u", current.Username,
 		"-f",
 		"-e", excludedSyscalls,
-	)
+	}
 	args = append(args, extraStraceOpts...)
 	args = append(args, traceeCmd...)
 
-	return &exec.Cmd{
+	cmd := &exec.Cmd{
 		Path: args[0],
 		Args: args,
-	}, nil
+	}
+
+	err = commands.AddSudoIfNeeded(cmd, "-E")
+	if err != nil {
+		return nil, err
+	}
+	return cmd, nil
 }
 
 // TraceExecCommand returns an exec.Cmd suitable for tracking timings of
