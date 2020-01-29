@@ -19,9 +19,11 @@ package snaps
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
+	"github.com/anonymouse64/etrace/internal/commands"
 	. "gopkg.in/check.v1"
 )
 
@@ -87,4 +89,34 @@ func (s *snapsTestSuite) TestRevision(c *C) {
 			c.Assert(os.Remove(currentSymlink), IsNil)
 		}
 	}
+}
+
+func (s *snapsTestSuite) TestDiscardSnapNs(c *C) {
+	tt := []struct {
+		snap string
+		uid  string
+	}{}
+
+	for _, t := range tt {
+		restoreFuncs := make([]func(), 3)
+
+		// mock the uid
+		if t.uid != "" {
+			r := commands.MockUID(t.uid)
+			restoreFuncs = append(restoreFuncs, r)
+		}
+
+		// mock the command runner
+		r := MockCmdCombinedOutput(func(cmd *exec.Cmd) ([]byte, error) {
+			c.Check(cmd.Args, DeepEquals, []string{"/usr/lib/snapd/snap-discard-ns", t.snap})
+			return []byte{}, nil
+		})
+		restoreFuncs = append(restoreFuncs, r)
+
+		// run the restore funcs
+		for _, r := range restoreFuncs {
+			r()
+		}
+	}
+
 }

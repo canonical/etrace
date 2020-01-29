@@ -46,3 +46,17 @@ func AddSudoIfNeeded(cmd *exec.Cmd, sudoArgs ...string) error {
 	}
 	return nil
 }
+
+// MockUID is only used for tests. We need to mock the uid for
+// consistent tests in other packages.
+func MockUID(uid string) (restore func()) {
+	old := userCurrent
+	userCurrent = func() (*user.User, error) {
+		return &user.User{
+			Uid: uid,
+		}, nil
+	}
+	return func() {
+		userCurrent = old
+	}
+}

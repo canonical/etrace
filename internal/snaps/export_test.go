@@ -17,10 +17,20 @@
 
 package snaps
 
+import "os/exec"
+
 func MockSnapRoot(new string) (restore func()) {
 	old := snapRoot
 	snapRoot = new
 	return func() {
 		snapRoot = old
+	}
+}
+
+func MockCmdCombinedOutput(new func(cmd *exec.Cmd) ([]byte, error)) (restore func()) {
+	old := cmdCombinedOutput
+	cmdCombinedOutput = new
+	return func() {
+		cmdCombinedOutput = old
 	}
 }

@@ -21,7 +21,6 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"testing"
 
@@ -93,11 +92,7 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 
 		// mock the current user
 		if t.uid != "" {
-			restore = MockUserCurrent(func() (*user.User, error) {
-				return &user.User{
-					Uid: t.uid,
-				}, nil
-			})
+			restore = MockUID(t.uid)
 		}
 
 		// do the test

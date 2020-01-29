@@ -28,6 +28,11 @@ import (
 
 var snapRoot = "/snap"
 
+// for mocking
+var cmdCombinedOutput = func(cmd *exec.Cmd) ([]byte, error) {
+	return cmd.CombinedOutput()
+}
+
 // DiscardSnapNs runs snap-discard-ns on a snap to get an accurate startup time
 // of setting up that snap's namespace
 func DiscardSnapNs(snap string) error {
@@ -36,7 +41,7 @@ func DiscardSnapNs(snap string) error {
 	if err != nil {
 		return err
 	}
-	out, err := cmd.CombinedOutput()
+	out, err := cmdCombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to run snap-discard-ns: %v (output: %s)", err, string(out))
 	}
