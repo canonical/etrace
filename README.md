@@ -153,5 +153,12 @@ $ ./etrace file --no-window-wait --cmd-stderr=/dev/null jq
 Total startup time: 422.055087ms
 ```
 
+## Current Limitations
+
+Currently, the `file` subcommand has a few limitations. 
+
+1. We currently only measure files that are under $SNAP, ideally this should be controllable by regex specified with an option
+1. Due to 1, we only support measuring files accessed by snap apps, but this limitation should go away when we can specify what files to measure with an option.
+
 ## License
 This project is licensed under the GPLv3. See LICENSE file for full license. Copyright 2019 Canonical Ltd.
