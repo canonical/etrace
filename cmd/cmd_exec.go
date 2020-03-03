@@ -21,15 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
-	"text/tabwriter"
 	"time"
 
 	"github.com/anonymouse64/etrace/internal/files"
@@ -37,19 +34,11 @@ import (
 	"github.com/anonymouse64/etrace/internal/snaps"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
-	flags "github.com/jessevdk/go-flags"
 )
 
-// Command is the command for the runner
-type Command struct {
-	Run                  cmdRun `command:"run" description:"Run a command"`
-	ShowErrors           bool   `short:"e" long:"errors" description:"Show errors as they happen"`
-	AdditionalIterations uint   `short:"n" long:"additional-iterations" description:"Number of additional iterations to run (1 iteration is always run)"`
-}
-
-// OutputResult is the result of running a command with various information
+// ExecOutputResult is the result of running a command with various information
 // encoded in it
-type OutputResult struct {
+type ExecOutputResult struct {
 	Runs []Execution
 }
 
@@ -61,7 +50,7 @@ type Execution struct {
 	Errors        []error
 }
 
-type cmdRun struct {
+type cmdExec struct {
 	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
 	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
 	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
@@ -82,55 +71,12 @@ type cmdRun struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-// The current input command
-var currentCmd Command
-var parser = flags.NewParser(&currentCmd, flags.Default)
-
-func main() {
-	_, err := exec.LookPath("sudo")
-	if err != nil {
-		log.Fatalf("cannot find sudo: %s", err)
-	}
-
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	_, err = parser.Parse()
-	if err != nil {
-		os.Exit(1)
-	}
-}
-
-func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
-	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
-}
-
-func wmctrlCloseWindow(name string) error {
-	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-		return err
-	}
-	return nil
-}
-
-var errs []error
-
-func resetErrors() {
-	errs = nil
-}
-
-func logError(err error) {
-	errs = append(errs, err)
-	if currentCmd.ShowErrors {
-		log.Println(err)
-	}
-}
-
 type straceResult struct {
 	timings *strace.ExecveTiming
 	err     error
 }
 
-func (x *cmdRun) Execute(args []string) error {
+func (x *cmdExec) Execute(args []string) error {
 	// check the output file
 	w := os.Stdout
 	if x.OutputFile != "" {
@@ -143,7 +89,7 @@ func (x *cmdRun) Execute(args []string) error {
 		w = file
 	}
 
-	outRes := OutputResult{}
+	outRes := ExecOutputResult{}
 	i := uint(0)
 	for i = 0; i < 1+currentCmd.AdditionalIterations; i++ {
 		// run the prepare script if it's available

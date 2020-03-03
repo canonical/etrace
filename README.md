@@ -1,7 +1,89 @@
 # etrace
 [![Actions Status](https://github.com/anonymouse64/etrace/workflows/Go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
 
-_etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis.
+_etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis. It also supports limited tracing of file accesses for analyzing what files a program accesses during it's execution.
+
+## Usage
+
+_etrace_ has two subcommands, `exec` and `file`.
+
+### `exec` subcommand
+
+`exec` is used for tracing the programs that are executed with the `execve` family of syscalls. It can also have tracing turned off to just measure graphical timing information.
+
+_etrace exec_ usage:
+
+```
+Usage:
+  etrace [OPTIONS] exec [exec-OPTIONS] Cmd...
+
+Application Options:
+  -e, --errors                   Show errors as they happen
+  -n, --additional-iterations=   Number of additional iterations to run (1 iteration is always run)
+
+Help Options:
+  -h, --help                     Show this help message
+
+[exec command options]
+      -w, --window-name=         Window name to wait for
+      -p, --prepare-script=      Script to run to prepare a run
+          --prepare-script-args= Args to provide to the prepare script
+      -r, --restore-script=      Script to run to restore after a run
+          --restore-script-args= Args to provide to the restore script
+      -c, --class-name=          Window class to use with xdotool instead of the the first Command
+      -t, --no-trace             Don't trace the process, just time the total execution
+      -s, --use-snap-run         Run command through snap run
+      -d, --discard-snap-ns      Discard the snap namespace before running the snap
+          --cmd-stdout=          Log file for run command's stdout
+          --cmd-stderr=          Log file for run command's stderr
+      -j, --json                 Output results in JSON
+      -o, --output-file=         A file to output the results (empty string means stdout)
+          --no-window-wait       Don't wait for the window to appear, just run until the program exits
+
+[exec command arguments]
+  Cmd:                           Command to run
+
+```
+
+### `file` subcommand
+
+The `file` subcommand will track all syscalls that a program executes which access files. This is useful for measuring the total set of files that a program attempts to access during its execution.
+
+_etrace file_ usage:
+
+```
+Usage:
+  etrace [OPTIONS] file [file-OPTIONS] Cmd...
+
+Application Options:
+  -e, --errors                   Show errors as they happen
+  -n, --additional-iterations=   Number of additional iterations to run (1 iteration is always run)
+
+Help Options:
+  -h, --help                     Show this help message
+
+[file command options]
+      -w, --window-name=         Window name to wait for
+      -p, --prepare-script=      Script to run to prepare a run
+          --prepare-script-args= Args to provide to the prepare script
+      -r, --restore-script=      Script to run to restore after a run
+          --restore-script-args= Args to provide to the restore script
+      -c, --class-name=          Window class to use with xdotool instead of the the first Command
+      -s, --use-snap-run         Run command through snap run
+      -d, --discard-snap-ns      Discard the snap namespace before running the snap
+          --cmd-stdout=          Log file for run command's stdout
+          --cmd-stderr=          Log file for run command's stderr
+      -j, --json                 Output results in JSON
+      -o, --output-file=         A file to output the results (empty string means stdout)
+          --no-window-wait       Don't wait for the window to appear, just run until the program exits
+
+[file command arguments]
+  Cmd:                           Command to run
+
+```
+
+
+## Examples
 
 Example output measuring the time it takes for gnome-calculator snap to display a window :
 
@@ -55,6 +137,20 @@ $ ./etrace run -s -d -t gnome-calculator
 Gdk-Message: 19:26:11.684: gnome-calculator: Fatal IO error 11 (Resource temporarily unavailable) on X server :0.
 
 Total startup time: 1.017437604s
+```
+
+Tracing what files are accessed by the `jq` snap:
+
+```
+$ ./etrace file --no-window-wait --cmd-stderr=/dev/null jq
+4 files accessed during snap run:
+     Filename
+     /snap/jq/6/command-jq.wrapper
+     /snap/jq/6/meta/snap.yaml
+     /snap/jq/6/usr/lib/x86_64-linux-gnu/libonig.so.2.0.1
+     /snap/jq/current
+
+Total startup time: 422.055087ms
 ```
 
 ## License

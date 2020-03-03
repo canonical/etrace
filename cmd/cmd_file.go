@@ -21,14 +21,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/anonymouse64/etrace/internal/files"
@@ -36,16 +33,9 @@ import (
 	"github.com/anonymouse64/etrace/internal/snaps"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
-	"github.com/jessevdk/go-flags"
 )
 
-// Command is the command for the runner
-type Command struct {
-	Run        cmdRun `command:"run" description:"Run a command"`
-	ShowErrors bool   `short:"e" long:"errors" description:"Show errors as they happen"`
-}
-
-type cmdRun struct {
+type cmdFile struct {
 	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
 	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
 	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
@@ -65,59 +55,15 @@ type cmdRun struct {
 	} `positional-args:"yes" required:"yes"`
 }
 
-// OutputResult is the result of running a command with various information
+// FileOutputResult is the result of running a command with various information
 // encoded in it
-type OutputResult struct {
+type FileOutputResult struct {
 	ExecvePaths   *strace.ExecvePaths
 	TimeToDisplay time.Duration
-	TimeToRun     time.Duration
 	Errors        []error
 }
 
-// The current input command
-var currentCmd Command
-var parser = flags.NewParser(&currentCmd, flags.Default)
-
-func main() {
-	_, err := exec.LookPath("sudo")
-	if err != nil {
-		log.Fatalf("cannot find sudo: %s", err)
-	}
-
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	_, err = parser.Parse()
-	if err != nil {
-		os.Exit(1)
-	}
-}
-
-func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
-	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
-}
-
-func wmctrlCloseWindow(name string) error {
-	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-		return err
-	}
-	return nil
-}
-
-var errs []error
-
-func resetErrors() {
-	errs = nil
-}
-
-func logError(err error) {
-	errs = append(errs, err)
-	if currentCmd.ShowErrors {
-		log.Println(err)
-	}
-}
-
-func (x *cmdRun) Execute(args []string) error {
+func (x *cmdFile) Execute(args []string) error {
 	// check the output file
 	w := os.Stdout
 	if x.OutputFile != "" {
@@ -310,11 +256,11 @@ func (x *cmdRun) Execute(args []string) error {
 		logError(fmt.Errorf("cannot extract runtime data: %w", err))
 	}
 
-	// make a new tabwriter to stderr
 	if !x.JSONOutput {
-		// wtab := tabWriterGeneric(w)
-		// TODO
-		// execFiles.Display(wtab)
+		// TODO: implement "pretty/simple" output for file
+		// make a new tabwriter to stderr
+		wtab := tabWriterGeneric(w)
+		execFiles.Display(wtab)
 	}
 
 	if x.RestoreScript != "" {
@@ -324,11 +270,10 @@ func (x *cmdRun) Execute(args []string) error {
 		}
 	}
 
-	outRes := OutputResult{
+	outRes := FileOutputResult{
 		TimeToDisplay: startup,
 		Errors:        errs,
 		ExecvePaths:   execFiles,
-		// TimeToRun:     execFiles.TotalTime,
 	}
 
 	// if we're not tracing then just use startup time as time to run
