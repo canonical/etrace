@@ -5,7 +5,7 @@ _etrace_ is a utility like strace or ltrace which uses ptrace to follow programs
 
 ## Installation
 
-This project uses go modules, so the easiest way is to git clone it `go install` it.
+This project uses go modules, so the easiest way is to `git clone` it and then `go install` it.
 
 ```
 $ git clone https://github.com/anonymouse64/etrace 
