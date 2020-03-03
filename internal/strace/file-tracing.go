@@ -20,6 +20,7 @@ package strace
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -157,6 +158,21 @@ func (e *ExecvePaths) addProcessPathAccess(path PathAccess) {
 	// save the path access for later, when we have all the processes finished
 	// and we can correlate path accesses to particular processes
 	e.pathProcesses = append(e.pathProcesses, path)
+}
+
+// Display shows the final exec timing output
+func (e *ExecvePaths) Display(w io.Writer) {
+	if len(e.AllFiles) == 0 {
+		return
+	}
+
+	fmt.Fprintf(w, "%d files accessed during snap run:\n", len(e.AllFiles))
+	fmt.Fprintf(w, "\tFilename\n")
+	for _, f := range e.AllFiles {
+		fmt.Fprintf(w, "\t%s\n", f)
+	}
+
+	fmt.Fprintln(w)
 }
 
 func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
