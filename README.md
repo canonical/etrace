@@ -143,14 +143,13 @@ Tracing what files are accessed by the `jq` snap:
 
 ```
 $ ./etrace file --no-window-wait --cmd-stderr=/dev/null jq
-4 files accessed during snap run:
-     Filename
-     /snap/jq/6/command-jq.wrapper
-     /snap/jq/6/meta/snap.yaml
-     /snap/jq/6/usr/lib/x86_64-linux-gnu/libonig.so.2.0.1
-     /snap/jq/current
+3 files accessed during snap run:
+     Filename                                              Size (bytes)
+     /snap/jq/6/command-jq.wrapper                         322
+     /snap/jq/6/meta/snap.yaml                             182
+     /snap/jq/6/usr/lib/x86_64-linux-gnu/libonig.so.2.0.1  426840
 
-Total startup time: 422.055087ms
+Total startup time: 125.04791ms
 ```
 
 ## Current Limitations
