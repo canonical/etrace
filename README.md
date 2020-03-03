@@ -3,6 +3,15 @@
 
 _etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis. It also supports limited tracing of file accesses for analyzing what files a program accesses during it's execution.
 
+## Installation
+
+This project uses go modules, so the easiest way is to git clone it `go install` it.
+
+```
+$ git clone https://github.com/anonymouse64/etrace 
+$ cd etrace && go install ./...
+```
+
 ## Usage
 
 _etrace_ has two subcommands, `exec` and `file`.
