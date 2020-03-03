@@ -57,28 +57,33 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 		cmd                *exec.Cmd
 		expectedCmd        *exec.Cmd
 		sudoArgs           []string
+		comment            string
 	}{
 		{
 			sudoExists:  true,
 			uid:         "0",
 			cmd:         &exec.Cmd{Args: []string{"foo"}},
 			expectedCmd: &exec.Cmd{Args: []string{"foo"}},
+			comment:     "running as root, sudo exists",
 		},
 		{
 			uid:         "0",
 			cmd:         &exec.Cmd{Args: []string{"foo"}},
 			expectedCmd: &exec.Cmd{Args: []string{"foo"}},
+			comment:     "running as root, sudo does not exist",
 		},
 		{
 			sudoExists:  true,
 			uid:         "1000",
 			cmd:         &exec.Cmd{Args: []string{"foo"}},
-			expectedCmd: &exec.Cmd{Args: []string{sudoPath, "foo"}},
+			expectedCmd: &exec.Cmd{Path: sudoPath, Args: []string{sudoPath, "foo"}},
+			comment:     "running as user, sudo exists",
 		},
 		{
 			uid:                "1000",
 			cmd:                &exec.Cmd{Args: []string{"foo"}},
 			expectedErrPattern: `cannot use strace without running as root or without sudo: exec: "sudo": executable file not found in \$PATH`,
+			comment:            "running as user, sudo does not exists",
 		},
 	}
 
@@ -88,7 +93,7 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 		// mock sudo executable
 		if t.sudoExists {
 			err := ioutil.WriteFile(sudoPath, []byte{}, 0755)
-			c.Assert(err, IsNil)
+			c.Assert(err, IsNil, Commentf(t.comment))
 		}
 
 		// mock the current user
@@ -104,11 +109,11 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 		err := AddSudoIfNeeded(t.cmd, t.sudoArgs...)
 		if t.expectedErrPattern != "" {
 			// check the error
-			c.Assert(err, ErrorMatches, t.expectedErrPattern)
+			c.Assert(err, ErrorMatches, t.expectedErrPattern, Commentf(t.comment))
 		} else {
 			c.Assert(err, IsNil)
 			// check the cmd
-			c.Assert(t.cmd, DeepEquals, t.expectedCmd)
+			c.Assert(t.cmd, DeepEquals, t.expectedCmd, Commentf(t.comment))
 		}
 
 		// un-mock the current user
@@ -118,7 +123,7 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 
 		// un-mock sudo
 		if t.sudoExists {
-			c.Assert(os.Remove(sudoPath), IsNil)
+			c.Assert(os.Remove(sudoPath), IsNil, Commentf(t.comment))
 		}
 	}
 }

@@ -43,6 +43,8 @@ func AddSudoIfNeeded(cmd *exec.Cmd, sudoArgs ...string) error {
 			append([]string{sudoPath}, sudoArgs...),
 			cmd.Args...,
 		)
+
+		cmd.Path = sudoPath
 	}
 	return nil
 }
