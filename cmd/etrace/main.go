@@ -29,10 +29,10 @@ import (
 
 // Command is the command for the runner
 type Command struct {
-	File                 cmdFile `command:"file" description:"Trace files accessed from a program"`
-	Exec                 cmdExec `command:"exec" description:"Trace the program executions from a program"`
-	ShowErrors           bool    `short:"e" long:"errors" description:"Show errors as they happen"`
-	AdditionalIterations uint    `short:"n" long:"additional-iterations" description:"Number of additional iterations to run (1 iteration is always run)"`
+	File       cmdFile `command:"file" description:"Trace files accessed from a program"`
+	Exec       cmdExec `command:"exec" description:"Trace the program executions from a program"`
+	ShowErrors bool    `short:"e" long:"errors" description:"Show errors as they happen"`
+	Repeat     uint    `short:"n" long:"repeat" description:"Number of times to repeat each task"`
 }
 
 // The current input command

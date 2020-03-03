@@ -28,7 +28,7 @@ Usage:
 
 Application Options:
   -e, --errors                   Show errors as they happen
-  -n, --additional-iterations=   Number of additional iterations to run (1 iteration is always run)
+  -n, --repeat=                  Number of times to repeat each task
 
 Help Options:
   -h, --help                     Show this help message
@@ -66,7 +66,7 @@ Usage:
 
 Application Options:
   -e, --errors                   Show errors as they happen
-  -n, --additional-iterations=   Number of additional iterations to run (1 iteration is always run)
+  -n, --repeat=                  Number of times to repeat each task
 
 Help Options:
   -h, --help                     Show this help message
@@ -167,6 +167,7 @@ Currently, the `file` subcommand has a few limitations.
 
 1. We currently only measure files that are under $SNAP, ideally this should be controllable by regex specified with an option
 1. Due to 1, we only support measuring files accessed by snap apps, but this limitation should go away when we can specify what files to measure with an option.
+1. The `--repeat` option is not yet implemented.
 
 ## License
 This project is licensed under the GPLv3. See LICENSE file for full license. Copyright 2019 Canonical Ltd.

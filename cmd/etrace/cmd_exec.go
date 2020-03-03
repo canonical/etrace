@@ -90,8 +90,11 @@ func (x *cmdExec) Execute(args []string) error {
 	}
 
 	outRes := ExecOutputResult{}
-	i := uint(0)
-	for i = 0; i < 1+currentCmd.AdditionalIterations; i++ {
+	max := uint(1)
+	if currentCmd.Repeat > 0 {
+		max = currentCmd.Repeat
+	}
+	for i := uint(0); i < max; i++ {
 		// run the prepare script if it's available
 		if x.PrepareScript != "" {
 			err := profiling.RunScript(x.PrepareScript, x.PrepareScriptArgs)
