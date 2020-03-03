@@ -107,10 +107,18 @@ type ProcessRuntime struct {
 	pid          string
 }
 
+// FileAndSize contains the path of a file and the size of it
+type FileAndSize struct {
+	// Path is where the file was measured as
+	Path string
+	// Size may be -1 if we cannot get the size of the file with os.Stat()
+	Size int64
+}
+
 // ExecvePaths represents the set of processes and files accessed by those
 // processes for a given program execution
 type ExecvePaths struct {
-	AllFiles  []string
+	AllFiles  []FileAndSize
 	Processes []ProcessRuntime
 	TotalTime time.Duration
 
@@ -167,9 +175,9 @@ func (e *ExecvePaths) Display(w io.Writer) {
 	}
 
 	fmt.Fprintf(w, "%d files accessed during snap run:\n", len(e.AllFiles))
-	fmt.Fprintf(w, "\tFilename\n")
+	fmt.Fprintf(w, "\tFilename\tSize (bytes)\n")
 	for _, f := range e.AllFiles {
-		fmt.Fprintf(w, "\t%s\n", f)
+		fmt.Fprintf(w, "\t%s\t%d\n", f.Path, f.Size)
 	}
 
 	fmt.Fprintln(w)
@@ -439,13 +447,27 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 	trace.pathProcesses = nil
 
 	// put all the files from the map set into the list
-	trace.AllFiles = make([]string, 0, len(trace.allFilesSet))
+	trace.AllFiles = make([]FileAndSize, 0, len(trace.allFilesSet))
 	for path := range trace.allFilesSet {
-		trace.AllFiles = append(trace.AllFiles, path)
+		// get the size of the file to include in the output
+		size := int64(-1)
+		info, err := os.Stat(path)
+		if err == nil {
+			size = info.Size()
+		}
+		// don't include directories
+		if err == nil && !info.IsDir() {
+			trace.AllFiles = append(trace.AllFiles, FileAndSize{
+				Path: path,
+				Size: size,
+			})
+		}
 	}
 
-	// sort the all files member for nicer formatting
-	sort.Strings(trace.AllFiles)
+	// sort the all files by the path member for nicer formatting
+	sort.Slice(trace.AllFiles, func(i, j int) bool {
+		return trace.AllFiles[i].Path < trace.AllFiles[j].Path
+	})
 
 	// free up path file set memory
 	trace.allFilesSet = nil
