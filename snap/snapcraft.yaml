@@ -1,0 +1,27 @@
+name: etrace
+base: core18
+version: "0.1"
+summary: etrace traces programs for debugging or performance analysis
+description: |
+  etrace is a utility like strace or ltrace which uses ptrace to follow 
+  programs executed by a main program for performance and debugging analysis. It
+  also supports limited tracing of file accesses for analyzing what files a
+  program accesses during it's execution.
+
+grade: stable
+confinement: classic
+
+apps:
+  etrace:
+    command: bin/etrace
+
+parts:
+  etrace:
+    # TODO: figure out why this doesn't work and why we need gcc as a
+    # build-package
+    build-environment:
+      - CGO_ENABLED: "0"
+    build-packages:
+      - gcc
+    plugin: go
+    source: .
