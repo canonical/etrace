@@ -18,10 +18,14 @@
 package main
 
 import (
+	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	flags "github.com/jessevdk/go-flags"
@@ -40,7 +44,49 @@ var currentCmd Command
 var parser = flags.NewParser(&currentCmd, flags.Default)
 
 func main() {
-	_, err := exec.LookPath("sudo")
+	// first check if we are under an apparmor profile, in which case we need
+	// to drop that because it affects tracing and leads to denials
+	// unfortunately
+
+	label, err := ioutil.ReadFile("/proc/self/attr/apparmor/current")
+	if err != nil && !os.IsNotExist(err) {
+		// failed to read apparmor label
+		log.Fatalf("cannot read apparmor label")
+	}
+
+	// if we read the file successfully, this system has apparmor enabled and we
+	// can read our own label
+	if err == nil {
+		// if the label is anything other than unconfined, we should try to
+		// re-exec and drop our apparmor label for the most accurate testing
+		if strings.TrimSpace(string(label)) != "unconfined" {
+			// write "exec unconfined" to the apparmor label for us and then
+			// re-exec
+			f, err := os.OpenFile("/proc/self/attr/exec", os.O_WRONLY, 0)
+			if err != nil {
+				log.Fatalf("could not open process exec attr to transition apparmor profile: %v", err)
+			}
+			defer f.Close()
+
+			// TODO: should we be extra safe like runc and verify that we are
+			//       writing to something in procfs? see https://github.com/opencontainers/runc/commit/d463f6485b809b5ea738f84e05ff5b456058a184
+
+			_, err = fmt.Fprintf(f, "%s", "exec unconfined")
+			if err != nil {
+				log.Fatalf("could not set process exec attr to unconfined: %v", err)
+			}
+
+			// now we are ready to re-exec ourselves before we re-wreck
+			// ourselves
+			if err := syscall.Exec("/proc/self/exe", os.Args, os.Environ()); err != nil {
+				log.Fatalf("failed to re-exec: %v", err)
+			}
+
+			// should be impossible to reach here
+		}
+	}
+
+	_, err = exec.LookPath("sudo")
 	if err != nil {
 		log.Fatalf("cannot find sudo: %s", err)
 	}
