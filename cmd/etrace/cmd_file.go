@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -49,6 +50,8 @@ type cmdFile struct {
 	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
 	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
 	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	FileRegex         string   `long:"file-regex" description:"Regular expression of files to return, if empty all files are returned"`
+	ParentDirPaths    []string `long:"parent-dirs" description:"List of parent directories matching files must be underneath to match"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -154,6 +157,38 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
+	var regex string
+	switch {
+	case x.FileRegex != "" && len(x.ParentDirPaths) != 0:
+		return errors.New("cannot use --file-regex with --parent-dirs")
+	case x.FileRegex != "":
+		// pass in the regexp
+		regex = x.FileRegex
+	case len(x.ParentDirPaths) != 0:
+		// build the regex to only match files rooted under the specified paths
+		// all of the paths are assumed to be directories
+
+		// the start of the capturing group
+		regex = "("
+		for i, dir := range x.ParentDirPaths {
+			// escape the slash character since it is a special regexp char
+			s := strings.Replace(filepath.Clean(dir), "/", `\/`, -1)
+			// then add conditional ending, so that we both catch any files
+			// below this directory, as well as this directory itself
+			s += `/.*`
+			// add to the regex
+			regex += s
+			// on all dirs except the last one, add a "|" to or the path
+			if i != len(x.ParentDirPaths)-1 {
+				regex += "|"
+			}
+		}
+		regex += ")"
+	default:
+		// default case is to match all files, so use ".*" as the regexp
+		regex = ".*"
+	}
+
 	xtool := xdotool.MakeXDoTool()
 
 	tryXToolClose := true
@@ -250,16 +285,17 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
-	snapRevision, err := snaps.Revision(x.Args.Cmd[0])
-	if err != nil {
-		return err
-	}
+	// snapRevision, err := snaps.Revision(x.Args.Cmd[0])
+	// if err != nil {
+	// 	return err
+	// }
+
+	fmt.Printf("using regex pattern of %q\n", regex)
 
 	// parse the strace log
 	execFiles, err := strace.TraceExecveWithFiles(
 		straceLog,
-		x.Args.Cmd[0],
-		snapRevision,
+		regexp.MustCompile(regex),
 	)
 	if err != nil {
 		logError(fmt.Errorf("cannot extract runtime data: %w", err))

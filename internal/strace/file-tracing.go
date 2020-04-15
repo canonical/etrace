@@ -29,7 +29,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/anonymouse64/etrace/internal/files"
@@ -39,55 +38,60 @@ import (
 // note that since it's really hard to match whether the fd + path match the
 // desired path, this just matches the fd + path and the code will join them to
 // see if the full path matches the desired path or not
-// TODO: could we reduce false matches here by only match syscalls with "at" at the end ???
+// TODO: should we also handle the returned fd too? probably don't need to
+// since just because a program gets a fd returned to it doesn't mean it does
+// anything to it, so we should catch the returned fd with another syscall if
+// the program actually uses it, right?
+// TODO: could we reduce false matches here by only match syscalls with "at" at
+// the end ???
 // lines look like:
 // 122166 1574886795.484115 newfstatat(3</proc/122166/fd>, "9", {st_mode=S_IFREG|0644, st_size=1377694, ...}, 0) = 0
 // 121041 1574886786.247289 openat(9</snap/chromium/958>, "data-dir", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_DIRECTORY) = 10</snap/chromium/958/data-dir>
-var fdAndPathRE = regexp.MustCompile(`([0-9]+) ([0-9]+\.[0-9]+) (.*)\([0-9]+<(.*)>, "([^\/]+)".*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`)
+// 121041 1574886786.247289 openat(9</snap/chromium/958>, "data-dir/some-sub-dir", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_DIRECTORY) = 10</snap/chromium/958/data-dir>
+var fdAndPathRE = regexp.MustCompile(
+	`([0-9]+) ([0-9]+\.[0-9]+) (.*)\([0-9]+<(.*?)>, "([^\/]?.+)".*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+)
 
 // matches syscalls that have AT_FDCWD with an absolute path as the 2nd argument
-// NOTE that this has to be replaced with the name of the snap and the revision
-// of the snap to match
 // lines look like:
 // 121188 1574886788.027891 openat(AT_FDCWD, "/snap/chromium/current/usr/lib/locale/en_US.UTF-8/LC_COLLATE", O_RDONLY|O_CLOEXEC) = 4</some/where>
 // 121188 1574886788.027966 openat(AT_FDCWD, "/snap/chromium/958/usr/lib/locale/en_US.utf8/LC_COLLATE", O_RDONLY|O_CLOEXEC) = 3</snap/chromium/958/usr/lib/locale/aa_DJ.utf8/LC_COLLATE>
 // 120994 1574886785.937456 readlinkat(AT_FDCWD, "/snap/chromium/current", ""..., 128) = 3
-const absPathWithCWDString = `([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(AT_FDCWD,\s+\"(\/snap\/SNAP_NAME\/(?:current|SNAP_REVISION)[^\"]*)\".*=\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`
+var absPathWithCWDRE = regexp.MustCompile(
+	`([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(AT_FDCWD,\s+\"(.*?)\".*=\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+)
 
 // matches syscalls that have just a single path as any of the arguments, except
 // those with AT_FDCWD as those cases are handled with absPathWithCWDString
 // above
-// note for syscalls like symlinkat, we don't match if there are more than 1
-// path in the args that match the desired path, but this is a small number of
-// syscalls and unlikely to succeed in a snap anyways because usually the second
-// path is something being modified which usually won't work with read-only
-// $SNAP
+// TODO: support syscalls like symlinkat to catch multiple file paths, since
+// we currently will only catch the last one
 // unfortunately we don't have negative lookarounds in go regex, so instead we
 // have an optional group with just AT_FDCWD in it to check if that group is
 // present we can tell if this really matched or not
 // TODO: investigate combining this pattern with the absPathWithCWDRE one
-// NOTE that this has to be replaced with the name of the snap and the revision
-// of the snap to match
 // lines look like:
 // 121372 1574886788.833540 symlinkat("/snap/chromium/958/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-am-et.so", AT_FDCWD, "/home/ijohnson/snap/chromium/common/.cache/immodules/im-am-et.so") = 0
 // 121185 1574886787.979943 execve("/snap/chromium/958/usr/sbin/update-icon-caches", [...], 0x561bce4ee880 /* 105 vars */) = 0
 // 120990 1574886792.229066 readlink("/snap/chromium/958/etc/fonts/conf.d/65-nonlatin.conf", ""..., 4095) = 30
 // 121041 1574886786.249939 mount("tmpfs", "/snap/chromium/958/data-dir/icons", ""..., 0, ""...) = 0
-const absPathString = `^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\((AT_FDCWD)?.*\"(\/snap\/chromium\/(?:current|958)[^>\"]*)\".*\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`
+var absPathRE = regexp.MustCompile(
+	`^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(.*?\"(.+?)\".*?\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`,
+)
 
 // matches syscalls that just have a single fd as any of the arguments,
 // INCLUDING those with an additional path argument immediately following the fd
 // which is also matched by fdAndPathRE, due to this care has to be taken not to
 // double count these accesses
-// NOTE that this has to be replaced with the name of the snap and the revision
-// of the snap to match
 // lines look like:
 // 121041 1574886786.247289 openat(9</snap/chromium/958>, "data-dir", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_DIRECTORY) = 10</snap/chromium/958/data-dir>
 // 121188 1574886788.028095 close(3</snap/chromium/958/usr/lib/locale/aa_DJ.utf8/LC_COLLATE>) = 0
 // 121188 1574886788.028052 mmap(NULL, 1244054, PROT_READ, MAP_PRIVATE, 3</snap/chromium/958/usr/lib/locale/aa_DJ.utf8/LC_COLLATE>, 0) = 0x7f8d780a7000
 // 120990 1574886796.125850 lseek(156</snap/chromium/958/data-dir/icons/Yaru/cursors/text>, 6144, SEEK_SET) = 6144
 // 120990 1574886796.126170 read(156</snap/chromium/958/data-dir/icons/Yaru/cursors/text>, ""..., 1024) = 1024
-const fdString = `([0-9]+)\s+([0-9]+\.[0-9]+)\s+(.*)\(.*[0-9]+<(\/snap\/SNAP_NAME\/(?:current|SNAP_REVISION).*)>.*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`
+var fdRE = regexp.MustCompile(
+	`([0-9]+)\s+([0-9]+\.[0-9]+)\s+(.*)\(.*[0-9]+<(.*?)>.*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+)
 
 // PathAccess represents a single syscall accessing a file
 type PathAccess struct {
@@ -183,7 +187,7 @@ func (e *ExecvePaths) Display(w io.Writer) {
 	fmt.Fprintln(w)
 }
 
-func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
+func handlePathMatchElem4(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -193,20 +197,23 @@ func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
 		return err
 	}
 
-	// add this path to the tracer's total list of paths
-	trace.addProcessPathAccess(
-		PathAccess{
-			Time:    unixFloatSecondsToTime(execStart),
-			Path:    match[4],
-			Syscall: syscall,
-			pid:     pid,
-		},
-	)
+	// add this path to the tracer's total list of paths if it matches the
+	// regex
+	if fileRegex.FindString(match[4]) != "" {
+		trace.addProcessPathAccess(
+			PathAccess{
+				Time:    unixFloatSecondsToTime(execStart),
+				Path:    match[4],
+				Syscall: syscall,
+				pid:     pid,
+			},
+		)
+	}
 
 	return nil
 }
 
-func handleFdAndPathMatch(trace execvePathsTracer, match []string, rootMatchingPaths []string) error {
+func handleFdAndPathMatch(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -218,26 +225,22 @@ func handleFdAndPathMatch(trace execvePathsTracer, match []string, rootMatchingP
 
 	// for this, we can get any path, not just the one we want, so we need to
 	// join the fd + path and see if it matches
-	candPath := filepath.Join(match[4], match[5])
-
-	for _, rootPath := range rootMatchingPaths {
-		if strings.HasPrefix(candPath, rootPath) {
-			trace.addProcessPathAccess(
-				PathAccess{
-					Time:    unixFloatSecondsToTime(execStart),
-					Path:    candPath,
-					Syscall: syscall,
-					pid:     pid,
-				},
-			)
-			break
-		}
+	fullPath := filepath.Join(match[4], match[5])
+	if fileRegex.FindString(fullPath) != "" {
+		trace.addProcessPathAccess(
+			PathAccess{
+				Time:    unixFloatSecondsToTime(execStart),
+				Path:    fullPath,
+				Syscall: syscall,
+				pid:     pid,
+			},
+		)
 	}
 
 	return nil
 }
 
-func handleAbsPathMatch(trace execvePathsTracer, match []string) error {
+func handleAbsPathMatch(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -253,15 +256,17 @@ func handleAbsPathMatch(trace execvePathsTracer, match []string) error {
 		return err
 	}
 
-	// add this path to the tracer's total list of paths
-	trace.addProcessPathAccess(
-		PathAccess{
-			Time:    unixFloatSecondsToTime(execStart),
-			Path:    match[5],
-			Syscall: syscall,
-			pid:     pid,
-		},
-	)
+	if fileRegex.FindString(match[4]) != "" {
+		// add this path to the tracer's total list of paths
+		trace.addProcessPathAccess(
+			PathAccess{
+				Time:    unixFloatSecondsToTime(execStart),
+				Path:    match[5],
+				Syscall: syscall,
+				pid:     pid,
+			},
+		)
+	}
 
 	return nil
 }
@@ -269,7 +274,13 @@ func handleAbsPathMatch(trace execvePathsTracer, match []string) error {
 // TraceExecveWithFiles will merge strace logs matching the given pattern and
 // produce a file report with all the files matching the specified pattern read
 // by every process in the execution
-func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*ExecvePaths, error) {
+// TODO: we could speed this up if we injected the provided regex into the
+// regular expressions we use to match all the strace lines, but that requires
+// some really tough regular expression work and may have odd user behavior for
+// "simple" cases like `.*`, which probably the user wants to use as `.*?`,
+// otherwise they would get filepaths like `/some/file/thing/", "` because the
+// filepath really has to stop at the last `"` character
+func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*ExecvePaths, error) {
 	// first ensure the log file is empty and exists and open it
 	mergedFile, err := files.EnsureExistsAndOpen(straceLogPattern, true)
 	if err != nil {
@@ -302,25 +313,6 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 	_, err = mergedFile.Seek(0, 0)
 	if err != nil {
 		return nil, err
-	}
-
-	// helper lambda function to compile snap specific regular expressions
-	replaceSnapStringsAndCompileRegExp := func(s string) *regexp.Regexp {
-		s = strings.Replace(s, "SNAP_NAME", snapName, 1)
-		s = strings.Replace(s, "SNAP_REVISION", snapRevision, 1)
-		return regexp.MustCompile(s)
-	}
-
-	// build the snap name + revision specific regex's
-	absPathWithCWDRE := replaceSnapStringsAndCompileRegExp(absPathWithCWDString)
-	absPathRE := replaceSnapStringsAndCompileRegExp(absPathString)
-	fdRE := replaceSnapStringsAndCompileRegExp(fdString)
-
-	// paths that files could show up underneath for the fd + path regex, use
-	// both current symlink and the absolute path with the revision
-	rootMatchingPaths := []string{
-		filepath.Join("/", "snap", snapName, snapRevision),
-		filepath.Join("/", "snap", snapName, "current"),
 	}
 
 	// start scanning the file
@@ -375,12 +367,12 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 
 		// now handle any file accesses
 		match = absPathWithCWDRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match); err != nil {
+		if err := handlePathMatchElem4(trace, match, regex); err != nil {
 			return nil, err
 		}
 
 		match = absPathRE.FindStringSubmatch(line)
-		if err := handleAbsPathMatch(trace, match); err != nil {
+		if err := handleAbsPathMatch(trace, match, regex); err != nil {
 			return nil, err
 		}
 
@@ -388,7 +380,7 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 		// if that match is successful then we just skip the last check and
 		// continue to the next line
 		match = fdAndPathRE.FindStringSubmatch(line)
-		if err := handleFdAndPathMatch(trace, match, rootMatchingPaths); err != nil {
+		if err := handleFdAndPathMatch(trace, match, regex); err != nil {
 			return nil, err
 		}
 
@@ -397,7 +389,7 @@ func TraceExecveWithFiles(straceLogPattern, snapName, snapRevision string) (*Exe
 		}
 
 		match = fdRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match); err != nil {
+		if err := handlePathMatchElem4(trace, match, regex); err != nil {
 			return nil, err
 		}
 	}
