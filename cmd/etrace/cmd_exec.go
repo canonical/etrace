@@ -509,7 +509,7 @@ func (x *cmdExec) Execute(args []string) error {
 				// make a new tabwriter to stderr
 				if !x.JSONOutput {
 					wtab := tabWriterGeneric(w)
-					slg.Display(wtab)
+					slg.Display(wtab, nil)
 				}
 			} else {
 				logError(fmt.Errorf("cannot extract runtime data: %w", straceRes.err))

@@ -52,6 +52,7 @@ type cmdFile struct {
 	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
 	FileRegex         string   `long:"file-regex" description:"Regular expression of files to return, if empty all files are returned"`
 	ParentDirPaths    []string `long:"parent-dirs" description:"List of parent directories matching files must be underneath to match"`
+	ShowPrograms      bool     `long:"show-programs" description:"Show programs that accessed the files"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -302,10 +303,13 @@ func (x *cmdFile) Execute(args []string) error {
 	}
 
 	if !x.JSONOutput {
-		// TODO: implement "pretty/simple" output for file
 		// make a new tabwriter to stderr
 		wtab := tabWriterGeneric(w)
-		execFiles.Display(wtab)
+		opts := &strace.DisplayOptions{}
+		if !x.ShowPrograms {
+			opts.NoDisplayPrograms = true
+		}
+		execFiles.Display(wtab, opts)
 	}
 
 	if x.RestoreScript != "" {

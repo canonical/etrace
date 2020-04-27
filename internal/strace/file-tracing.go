@@ -175,7 +175,7 @@ func (e *ExecvePaths) addProcessPathAccess(path PathAccess) {
 }
 
 // Display shows the final exec timing output
-func (e *ExecvePaths) Display(w io.Writer) {
+func (e *ExecvePaths) Display(w io.Writer, opts *DisplayOptions) {
 	if len(e.AllFiles) == 0 {
 		return
 	}
