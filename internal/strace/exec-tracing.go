@@ -106,7 +106,7 @@ func (stt *ExecveTiming) prune() {
 }
 
 // Display shows the final exec timing output
-func (stt *ExecveTiming) Display(w io.Writer) {
+func (stt *ExecveTiming) Display(w io.Writer, opts *DisplayOptions) {
 	if len(stt.ExeRuntimes) == 0 {
 		return
 	}
