@@ -113,31 +113,35 @@ type ProcessRuntime struct {
 	pid          string
 }
 
-// FileAndSize contains the path of a file and the size of it
-type FileAndSize struct {
+// CommonFileInfo contains the path of a file and the size of it
+type CommonFileInfo struct {
 	// Path is where the file was measured as
 	Path string
 	// Size may be -1 if we cannot get the size of the file with os.Stat()
 	Size int64
+	// Program is the program that accessed this file
+	Program string
+
+	// pid is not output or used except for comparing whether a file access is
+	// duplicate
+	pid string
 }
 
 // ExecvePaths represents the set of processes and files accessed by those
 // processes for a given program execution
 type ExecvePaths struct {
-	AllFiles  []FileAndSize
+	AllFiles  []CommonFileInfo
 	Processes []ProcessRuntime
 	TotalTime time.Duration
 
 	*pidTracker
 
 	persistentPidTracker *pidTracker
-	allFilesSet          map[string]bool
 	pathProcesses        []PathAccess
 }
 
 type execvePathsTracer interface {
 	execveTimingTracer
-	addPathToList(path string)
 	addProcessPathAccess(path PathAccess)
 }
 
@@ -146,8 +150,8 @@ func newExecveFiles() *ExecvePaths {
 	// TODO: merge this with execveTiming in an interface so we can share
 	// parsing loop between the implementations
 	e := &ExecvePaths{
-		allFilesSet: make(map[string]bool),
-		pidTracker:  newpidTracker(),
+		AllFiles:   make([]CommonFileInfo, 0),
+		pidTracker: newpidTracker(),
 	}
 	return e
 }
@@ -161,14 +165,7 @@ func (e *ExecvePaths) addExeRuntime(start float64, exe string, totalSec float64,
 	})
 }
 
-func (e *ExecvePaths) addPathToList(path string) {
-	e.allFilesSet[path] = true
-}
-
 func (e *ExecvePaths) addProcessPathAccess(path PathAccess) {
-	// add the path to the full list
-	e.addPathToList(path.Path)
-
 	// save the path access for later, when we have all the processes finished
 	// and we can correlate path accesses to particular processes
 	e.pathProcesses = append(e.pathProcesses, path)
@@ -189,7 +186,7 @@ func (e *ExecvePaths) Display(w io.Writer, opts *DisplayOptions) {
 	fmt.Fprintln(w)
 }
 
-func handlePathMatchElem4(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
+func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -199,23 +196,20 @@ func handlePathMatchElem4(trace execvePathsTracer, match []string, fileRegex *re
 		return err
 	}
 
-	// add this path to the tracer's total list of paths if it matches the
-	// regex
-	if fileRegex.FindString(match[4]) != "" {
-		trace.addProcessPathAccess(
-			PathAccess{
-				Time:    unixFloatSecondsToTime(execStart),
-				Path:    match[4],
-				Syscall: syscall,
-				pid:     pid,
-			},
-		)
-	}
+	// add this path to the tracer's total list of paths
+	trace.addProcessPathAccess(
+		PathAccess{
+			Time:    unixFloatSecondsToTime(execStart),
+			Path:    match[4],
+			Syscall: syscall,
+			pid:     pid,
+		},
+	)
 
 	return nil
 }
 
-func handleFdAndPathMatch(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
+func handleFdAndPathMatch(trace execvePathsTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -225,24 +219,21 @@ func handleFdAndPathMatch(trace execvePathsTracer, match []string, fileRegex *re
 		return err
 	}
 
-	// for this, we can get any path, not just the one we want, so we need to
-	// join the fd + path and see if it matches
+	// for this, we need to join the fd + path
 	fullPath := filepath.Join(match[4], match[5])
-	if fileRegex.FindString(fullPath) != "" {
-		trace.addProcessPathAccess(
-			PathAccess{
-				Time:    unixFloatSecondsToTime(execStart),
-				Path:    fullPath,
-				Syscall: syscall,
-				pid:     pid,
-			},
-		)
-	}
+	trace.addProcessPathAccess(
+		PathAccess{
+			Time:    unixFloatSecondsToTime(execStart),
+			Path:    fullPath,
+			Syscall: syscall,
+			pid:     pid,
+		},
+	)
 
 	return nil
 }
 
-func handleAbsPathMatch(trace execvePathsTracer, match []string, fileRegex *regexp.Regexp) error {
+func handleAbsPathMatch(trace execvePathsTracer, match []string) error {
 	if len(match) == 0 {
 		return nil
 	}
@@ -258,17 +249,15 @@ func handleAbsPathMatch(trace execvePathsTracer, match []string, fileRegex *rege
 		return err
 	}
 
-	if fileRegex.FindString(match[4]) != "" {
-		// add this path to the tracer's total list of paths
-		trace.addProcessPathAccess(
-			PathAccess{
-				Time:    unixFloatSecondsToTime(execStart),
-				Path:    match[5],
-				Syscall: syscall,
-				pid:     pid,
-			},
-		)
-	}
+	// add this path to the tracer's total list of paths
+	trace.addProcessPathAccess(
+		PathAccess{
+			Time:    unixFloatSecondsToTime(execStart),
+			Path:    match[5],
+			Syscall: syscall,
+			pid:     pid,
+		},
+	)
 
 	return nil
 }
@@ -369,12 +358,12 @@ func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*Execv
 
 		// now handle any file accesses
 		match = absPathWithCWDRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match, regex); err != nil {
+		if err := handlePathMatchElem4(trace, match); err != nil {
 			return nil, err
 		}
 
 		match = absPathRE.FindStringSubmatch(line)
-		if err := handleAbsPathMatch(trace, match, regex); err != nil {
+		if err := handleAbsPathMatch(trace, match); err != nil {
 			return nil, err
 		}
 
@@ -382,7 +371,7 @@ func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*Execv
 		// if that match is successful then we just skip the last check and
 		// continue to the next line
 		match = fdAndPathRE.FindStringSubmatch(line)
-		if err := handleFdAndPathMatch(trace, match, regex); err != nil {
+		if err := handleFdAndPathMatch(trace, match); err != nil {
 			return nil, err
 		}
 
@@ -391,7 +380,7 @@ func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*Execv
 		}
 
 		match = fdRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match, regex); err != nil {
+		if err := handlePathMatchElem4(trace, match); err != nil {
 			return nil, err
 		}
 	}
@@ -440,28 +429,40 @@ func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*Execv
 	// free up the path process access memory
 	trace.pathProcesses = nil
 
-	// put all the files from the map set into the list
-	trace.AllFiles = make([]FileAndSize, 0, len(trace.allFilesSet))
-	for path := range trace.allFilesSet {
-		// get the size of the file to include in the output
-		size := int64(-1)
-		info, err := os.Stat(path)
-		if err == nil {
-			size = info.Size()
+	// use a map to not count file accesses by the same program multiple times
+	seenFiles := make(map[CommonFileInfo]bool, 0)
+
+	// now build up a list of path, program, and file size infos
+	for _, proc := range trace.Processes {
+		for _, pathAccess := range proc.PathAccesses {
+
+			fileInfo := CommonFileInfo{
+				Path:    pathAccess.Path,
+				Program: proc.Exe,
+				pid:     proc.pid,
+			}
+
+			if seenFiles[fileInfo] {
+				continue
+			}
+			seenFiles[fileInfo] = true
+
+			size := int64(-1)
+			info, err := os.Stat(pathAccess.Path)
+			if err == nil {
+				size = info.Size()
+			}
+
+			fileInfo.Size = size
+
+			trace.AllFiles = append(trace.AllFiles, fileInfo)
 		}
-		trace.AllFiles = append(trace.AllFiles, FileAndSize{
-			Path: path,
-			Size: size,
-		})
 	}
 
 	// sort the all files by the path member for nicer formatting
 	sort.Slice(trace.AllFiles, func(i, j int) bool {
 		return trace.AllFiles[i].Path < trace.AllFiles[j].Path
 	})
-
-	// free up path file set memory
-	trace.allFilesSet = nil
 
 	return trace, nil
 }
