@@ -178,9 +178,47 @@ func (e *ExecvePaths) Display(w io.Writer, opts *DisplayOptions) {
 	}
 
 	fmt.Fprintf(w, "%d files accessed during snap run:\n", len(e.AllFiles))
-	fmt.Fprintf(w, "\tFilename\tSize (bytes)\n")
-	for _, f := range e.AllFiles {
-		fmt.Fprintf(w, "\t%s\t%d\n", f.Path, f.Size)
+
+	if opts != nil && opts.NoDisplayPrograms {
+		// TODO: we should pass some kind of opt to TraceExecveWithFiles to
+		// instruct it not to include the programs instead of here, but oh
+		// well here we are
+		seenFiles := make(map[CommonFileInfo]bool)
+		for _, f := range e.AllFiles {
+			droppedProgramFileInfo := CommonFileInfo{
+				Path: f.Path,
+				Size: f.Size,
+			}
+			if seenFiles[droppedProgramFileInfo] {
+				continue
+			}
+			seenFiles[droppedProgramFileInfo] = true
+			if f.Size == -1 {
+				// don't output the size
+				fmt.Fprintf(w, "\t%s\t \n", f.Path)
+			} else {
+				fmt.Fprintf(w, "\t%s\t%d\n", f.Path, f.Size)
+			}
+		}
+		fmt.Fprintf(w, "\tFilename\tSize (bytes)\n")
+		for _, f := range e.AllFiles {
+			if f.Size == -1 {
+				// don't output the size
+				fmt.Fprintf(w, "\t%s\t \n", f.Path)
+			} else {
+				fmt.Fprintf(w, "\t%s\t%d\n", f.Path, f.Size)
+			}
+		}
+	} else {
+		fmt.Fprintf(w, "\tProgram\tFilename\tSize (bytes)\n")
+		for _, f := range e.AllFiles {
+			if f.Size == -1 {
+				// don't output the size
+				fmt.Fprintf(w, "\t%s\t%s\t \n", f.Program, f.Path)
+			} else {
+				fmt.Fprintf(w, "\t%s\t%s\t%d\n", f.Program, f.Path, f.Size)
+			}
+		}
 	}
 
 	fmt.Fprintln(w)
