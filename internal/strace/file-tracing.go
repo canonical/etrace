@@ -449,13 +449,10 @@ func TraceExecveWithFiles(straceLogPattern string, regex *regexp.Regexp) (*Execv
 		if err == nil {
 			size = info.Size()
 		}
-		// don't include directories
-		if err == nil && !info.IsDir() {
-			trace.AllFiles = append(trace.AllFiles, FileAndSize{
-				Path: path,
-				Size: size,
-			})
-		}
+		trace.AllFiles = append(trace.AllFiles, FileAndSize{
+			Path: path,
+			Size: size,
+		})
 	}
 
 	// sort the all files by the path member for nicer formatting
