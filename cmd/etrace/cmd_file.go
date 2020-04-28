@@ -286,13 +286,6 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
-	// snapRevision, err := snaps.Revision(x.Args.Cmd[0])
-	// if err != nil {
-	// 	return err
-	// }
-
-	fmt.Printf("using regex pattern of %q\n", regex)
-
 	// parse the strace log
 	execFiles, err := strace.TraceExecveWithFiles(
 		straceLog,
