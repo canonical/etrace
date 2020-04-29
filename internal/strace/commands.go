@@ -100,6 +100,13 @@ func TraceFilesCommand(straceLogPattern string, origCmd ...string) (*exec.Cmd, e
 		// this makes the strace output append </path/to/file/or/dir> wherever
 		// a file descriptor shows up
 		"-y",
+		// don't output any verbose structures as they may have strings in them
+		// that aren't files, such as:
+		// recvfrom(7<socket:[624422]>, ""..., 2048, 0, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("127.0.0.53")}, [28->16])
+		// we don't want to match 127.0.0.53, and instead with this option set
+		// we will get the much less ambiguous:
+		// recvfrom(6<socket:[644672]>, ""..., 65536, 0, 0x7f895afcc0e0, 0x7f895afcc0c0) = 68
+		"-everbose=none",
 		// since we also specify the "ff" option, this is not a verbatim
 		// filename that strace outputs to, it's now used as a pattern that
 		// strace will use to create the actual filenames, with the pid for each
