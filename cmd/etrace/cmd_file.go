@@ -37,22 +37,24 @@ import (
 )
 
 type cmdFile struct {
-	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
-	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
-	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs     bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
-	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
-	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	FileRegex         string   `long:"file-regex" description:"Regular expression of files to return, if empty all files are returned"`
-	ParentDirPaths    []string `long:"parent-dirs" description:"List of parent directories matching files must be underneath to match"`
-	ShowPrograms      bool     `long:"show-programs" description:"Show programs that accessed the files"`
+	WindowName           string   `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript        string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	PrepareScriptArgs    []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
+	RestoreScript        string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScriptArgs    []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	WindowClass          string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	RunThroughSnap       bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs        bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog     string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog     string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	JSONOutput           bool     `short:"j" long:"json" description:"Output results in JSON"`
+	OutputFile           string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
+	NoWindowWait         bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	FileRegex            string   `long:"file-regex" description:"Regular expression of files to return, if empty all files are returned"`
+	ParentDirPaths       []string `long:"parent-dirs" description:"List of parent directories matching files must be underneath to match"`
+	ProgramRegex         string   `long:"program-regex" description:"Regular expression of programs whose file accesses should be returned"`
+	IncludeSnapdPrograms bool     `long:"include-snapd-programs" description:"Include snapd programs whose file accesses match in the list of files accessed"`
+	ShowPrograms         bool     `long:"show-programs" description:"Show programs that accessed the files"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -158,19 +160,23 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
-	var regex string
+	// handle the file regex
+	var fileRegex *regexp.Regexp
 	switch {
 	case x.FileRegex != "" && len(x.ParentDirPaths) != 0:
 		return errors.New("cannot use --file-regex with --parent-dirs")
 	case x.FileRegex != "":
-		// pass in the regexp
-		regex = x.FileRegex
+		// check that what the user passed in is a correct regex
+		fileRegex, err = regexp.Compile(x.FileRegex)
+		if err != nil {
+			return fmt.Errorf("invalid setting for --file-regex (%q): %v", x.FileRegex, err)
+		}
 	case len(x.ParentDirPaths) != 0:
 		// build the regex to only match files rooted under the specified paths
 		// all of the paths are assumed to be directories
 
 		// the start of the capturing group
-		regex = "("
+		fileRegexStr := "("
 		for i, dir := range x.ParentDirPaths {
 			// escape the slash character since it is a special regexp char
 			s := strings.Replace(filepath.Clean(dir), "/", `\/`, -1)
@@ -178,16 +184,57 @@ func (x *cmdFile) Execute(args []string) error {
 			// below this directory, as well as this directory itself
 			s += `/.*`
 			// add to the regex
-			regex += s
+			fileRegexStr += s
 			// on all dirs except the last one, add a "|" to or the path
 			if i != len(x.ParentDirPaths)-1 {
-				regex += "|"
+				fileRegexStr += "|"
 			}
 		}
-		regex += ")"
+		fileRegexStr += ")"
+
+		fileRegex, err = regexp.Compile(fileRegexStr)
+		if err != nil {
+			return fmt.Errorf("internal error compiling regex for --parent-dirs setting (%v): %v", x.ParentDirPaths, err)
+		}
 	default:
 		// default case is to match all files, so use ".*" as the regexp
-		regex = ".*"
+		fileRegex = regexp.MustCompile(".*")
+	}
+
+	// now handle the executable program patterns
+	var programRegex *regexp.Regexp
+
+	if x.ProgramRegex != "" {
+		programRegex, err = regexp.Compile(x.ProgramRegex)
+		if err != nil {
+			return fmt.Errorf("invalid setting for --program-regex (%q): %v", x.ProgramRegex, err)
+		}
+	} else {
+		// include all programs
+		programRegex = regexp.MustCompile(".*")
+	}
+
+	// ideally we would use a negative lookahead regex to implement exclusion listing
+	// certain programs in the programRegex, but go doesn't support those and
+	// I'm not ready to jump ship to use a non-stdlib regex lib, so for now
+	// we will just use globs to match snap binaries from /usr/lib/snapd/
+	// /snap/core/*/<snap tool path> and /snap/snapd/*/<snap tool path>
+	excludeListProgramPatterns := []string{
+		// all installs
+		"/usr/bin/snap",
+		"/usr/lib/snapd/*",
+		"/sbin/apparmor_parser",
+
+		// core snap programs
+		"/snap/core/*/usr/bin/snap",
+		"/snap/core/*/usr/lib/snapd/*",
+
+		// snapd snap
+		"/snap/snapd/*/usr/bin/snap",
+		"/snap/snapd/*/usr/lib/snapd/*",
+	}
+	if x.IncludeSnapdPrograms {
+		excludeListProgramPatterns = []string{}
 	}
 
 	xtool := xdotool.MakeXDoTool()
@@ -289,7 +336,9 @@ func (x *cmdFile) Execute(args []string) error {
 	// parse the strace log
 	execFiles, err := strace.TraceExecveWithFiles(
 		straceLog,
-		regexp.MustCompile(regex),
+		fileRegex,
+		programRegex,
+		excludeListProgramPatterns,
 	)
 	if err != nil {
 		logError(fmt.Errorf("cannot extract runtime data: %w", err))
