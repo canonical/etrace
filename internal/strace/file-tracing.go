@@ -96,7 +96,7 @@ var absPathRE = regexp.MustCompile(
 // DOES NOT match these lines:
 // 27652 1587946984.879501 write(9<pipe:[200089]>, ""..., 4) = 4
 var fdRE = regexp.MustCompile(
-	`([0-9]+)\s+([0-9]+\.[0-9]+)\s+(.*)\(.*[0-9]+<(/.*?)>.*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+	`([0-9]+)\s+([0-9]+\.[0-9]+)\s+(.*)\(.*[0-9]+<(\/.*?)>.*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
 )
 
 // PathAccess represents a single syscall accessing a file
