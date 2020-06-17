@@ -75,12 +75,30 @@ var absPathWithCWDRE = regexp.MustCompile(
 // present we can tell if this really matched or not
 // TODO: investigate combining this pattern with the absPathWithCWDRE one
 // lines look like:
+// 25251 1588799883.286400 newfstatat(-1, "/sys/kernel/security/apparmor/features", 0x7ffe17b21970, 0) = 0
+// DOES NOT MATCH these lines:
+// 26004 1588121137.500643 recvfrom(7<socket:[624422]>, ""..., 2048, 0, {sa_family=AF_INET, sin_port=htons(53), sin_addr=inet_addr("127.0.0.53")}, [28->16]) = 84
+var absPathRE = regexp.MustCompile(
+	`^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\([^\"]+\"([^\"].+?)\".*?\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`,
+)
+
+// matches syscalls that have a single path as their first argument, except
+// those with AT_FDCWD as those cases are handled with absPathWithCWDString
+// above
+// TODO: support syscalls like symlinkat to catch multiple file paths, since
+// we currently will only catch the last one
+// unfortunately we don't have negative lookarounds in go regex, so instead we
+// have an optional group with just AT_FDCWD in it to check if that group is
+// present we can tell if this really matched or not
+// TODO: investigate combining this pattern with the absPathWithCWDRE one
+// lines look like:
 // 121372 1574886788.833540 symlinkat("/snap/chromium/958/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-am-et.so", AT_FDCWD, "/home/ijohnson/snap/chromium/common/.cache/immodules/im-am-et.so") = 0
 // 121185 1574886787.979943 execve("/snap/chromium/958/usr/sbin/update-icon-caches", [...], 0x561bce4ee880 /* 105 vars */) = 0
 // 120990 1574886792.229066 readlink("/snap/chromium/958/etc/fonts/conf.d/65-nonlatin.conf", ""..., 4095) = 30
 // 121041 1574886786.249939 mount("tmpfs", "/snap/chromium/958/data-dir/icons", ""..., 0, ""...) = 0
-var absPathRE = regexp.MustCompile(
-	`^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(.*?\"(.+?)\".*?\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`,
+// 15546 1588797314.955495 readlink("/proc/self/fd/3", ""..., 4096) = 25
+var absPathFirstRE = regexp.MustCompile(
+	`^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(\"([^\"].+?)\".*?\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`,
 )
 
 // matches syscalls that just have a single fd as any of the arguments,
@@ -93,8 +111,12 @@ var absPathRE = regexp.MustCompile(
 // 121188 1574886788.028052 mmap(NULL, 1244054, PROT_READ, MAP_PRIVATE, 3</snap/chromium/958/usr/lib/locale/aa_DJ.utf8/LC_COLLATE>, 0) = 0x7f8d780a7000
 // 120990 1574886796.125850 lseek(156</snap/chromium/958/data-dir/icons/Yaru/cursors/text>, 6144, SEEK_SET) = 6144
 // 120990 1574886796.126170 read(156</snap/chromium/958/data-dir/icons/Yaru/cursors/text>, ""..., 1024) = 1024
+// 20721 1592353878.163963 ftruncate(26</tmp/.glDNftWu (deleted)>, 8192) = 0
+
 // DOES NOT match these lines:
 // 27652 1587946984.879501 write(9<pipe:[200089]>, ""..., 4) = 4
+// 25251 1588799883.286429 openat(-1, "/sys/kernel/security/apparmor/features", O_RDONLY|O_CLOEXEC|O_DIRECTORY) = 3</sys/kernel/security/apparmor/features>
+// ^- is handled by absPathRE
 var fdRE = regexp.MustCompile(
 	`([0-9]+)\s+([0-9]+\.[0-9]+)\s+(.*)\(.*[0-9]+<(\/.*?)>.*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
 )
