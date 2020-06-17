@@ -18,6 +18,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +30,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/anonymouse64/etrace/internal/commands"
 
 	"github.com/anonymouse64/etrace/internal/files"
 	"github.com/anonymouse64/etrace/internal/profiling"
@@ -65,6 +69,7 @@ type cmdExec struct {
 	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
 	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
 	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	ReinstallSnap     bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -95,6 +100,152 @@ func (x *cmdExec) Execute(args []string) error {
 		max = currentCmd.Repeat
 	}
 	for i := uint(0); i < max; i++ {
+		// if we were supposed to reinstall the snap before the test, do that
+		// first
+		if x.ReinstallSnap {
+
+			var conns [][]string
+			var isClassic, isDevmode, isJailmode, isUnaliased bool
+			snapName := x.Args.Cmd[0]
+
+			// save interface connections
+			ifacesOut, err := exec.Command("snap", "connections", snapName).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to save snap connections output: %v (%s)", err, string(ifacesOut))
+			}
+
+			s := bufio.NewScanner(bytes.NewReader(ifacesOut))
+
+			// discard the first line as that's the column headers
+			// but also if a snap has no connections then the output here will
+			// be empty, so we just continue as normal here
+			if s.Scan() {
+				// empty output somehow
+				for s.Scan() {
+					// split each connection by whitespace
+					fields := strings.Fields(s.Text())
+
+					if len(fields) != 4 {
+						return fmt.Errorf("error saving interface state: unexpected number of rows from snap connections output")
+					}
+
+					// ignore disconnected plugs and slots which are indicated
+					// by "-" in the snap connections output
+					if fields[1] == "-" || fields[2] == "-" {
+						continue
+					}
+					// the first column is the interface type which we don't care
+					// about
+					// the second column is the plug, which we do care about
+					// the third column is the slot, which we also care about
+					conns = append(conns, []string{fields[1], fields[2]})
+				}
+			}
+
+			// get the current snap file for the installed snap
+			rev, err := snaps.Revision(snapName)
+			if err != nil {
+				return err
+			}
+
+			snapFileName := fmt.Sprintf("%s_%s.snap", snapName, rev)
+			tmpSnap := filepath.Join("/tmp/", snapFileName)
+			snapFileSrc := filepath.Join("/var/lib/snapd/snaps", snapFileName)
+
+			cpCmd := exec.Command("cp", snapFileSrc, tmpSnap)
+			err = commands.AddSudoIfNeeded(cpCmd)
+			if err != nil {
+				return fmt.Errorf("failed to add sudo to command: %v", err)
+			}
+			cpOut, err := cpCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to copy snap %s: %v (%s)", snapFileSrc, err, string(cpOut))
+			}
+
+			// get the install options for the snap
+			infoOut, err := exec.Command("snap", "info", snapName).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to get snap info for snap %s: %v (%s)", snapName, err, string(infoOut))
+			}
+
+			s = bufio.NewScanner(bytes.NewReader(infoOut))
+
+			for s.Scan() {
+				line := s.Text()
+				if strings.HasPrefix(line, "installed:") {
+					fields := strings.Fields(line)
+					if len(fields) != 5 {
+						return fmt.Errorf("unexpected snap info output: snap info installed line does not have 5 fields")
+					}
+
+					// we only care about the last field, the options which will
+					// be comma delimited
+					for _, opt := range strings.Split(fields[4], ",") {
+						switch opt {
+						case "classic":
+							isClassic = true
+						case "devmode":
+							isDevmode = true
+						case "jailmode":
+							isJailmode = true
+						case "isUnaliased":
+							isUnaliased = true
+						case "disabled":
+							return fmt.Errorf("snap %s is disabled, refusing to remove and reinstall, please enable first with snap enable", snapName)
+						case "blocked":
+							// TODO: what should one do about a blocked snap?
+							// return fmt.Errorf("snap %s is blocked, please see warnings from snap info to proceed", snapName)
+						case "broken":
+							return fmt.Errorf("snap %s is broken, please fix before continuing", snapName)
+						}
+					}
+				}
+			}
+
+			// now remove the snap
+			removeOut, err := exec.Command("snap", "remove", snapName).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to remove snap %s: %v (%s)", snapName, err, string(removeOut))
+			}
+
+			// now reinstall the snap
+			installCmd := exec.Command("snap", "install", tmpSnap)
+			if isClassic {
+				installCmd.Args = append(installCmd.Args, "--classic")
+			}
+			if isJailmode {
+				installCmd.Args = append(installCmd.Args, "--jailmode")
+			}
+			if isDevmode {
+				installCmd.Args = append(installCmd.Args, "--devmode")
+			}
+			if isUnaliased {
+				installCmd.Args = append(installCmd.Args, "--unaliased")
+			}
+
+			err = commands.AddSudoIfNeeded(installCmd)
+			if err != nil {
+				return fmt.Errorf("failed to add sudo if needed: %v", err)
+			}
+			_, err = installCmd.CombinedOutput()
+			if err != nil {
+				return err
+			}
+
+			// restore the interface connections
+			for _, conn := range conns {
+				connectCmd := exec.Command("snap", "connect", conn[0], conn[1])
+				err := commands.AddSudoIfNeeded(connectCmd)
+				if err != nil {
+					return fmt.Errorf("failed to add sudo to command: %v", err)
+				}
+				connectOut, err := connectCmd.CombinedOutput()
+				if err != nil {
+					return fmt.Errorf("failed to restore interface connection for snap %s: %v (%s)", snapName, err, string(connectOut))
+				}
+			}
+		}
+
 		// run the prepare script if it's available
 		if x.PrepareScript != "" {
 			err := profiling.RunScript(x.PrepareScript, x.PrepareScriptArgs)
