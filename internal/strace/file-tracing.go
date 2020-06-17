@@ -220,14 +220,14 @@ func (e *ExecvePaths) Display(w io.Writer, opts *DisplayOptions) {
 	fmt.Fprintln(w)
 }
 
-func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
+func handlePathMatchElem4(trace execvePathsTracer, match []string) (bool, error) {
 	if len(match) == 0 {
-		return nil
+		return false, nil
 	}
 
 	pid, execStart, syscall, err := parsePIDAndReturnOthers(match)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// add this path to the tracer's total list of paths
@@ -240,17 +240,17 @@ func handlePathMatchElem4(trace execvePathsTracer, match []string) error {
 		},
 	)
 
-	return nil
+	return true, nil
 }
 
-func handleFdAndPathMatch(trace execvePathsTracer, match []string) error {
+func handleFdAndPathMatch(trace execvePathsTracer, match []string) (bool, error) {
 	if len(match) == 0 {
-		return nil
+		return false, nil
 	}
 
 	pid, execStart, syscall, err := parsePIDAndReturnOthers(match)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// for this, we need to join the fd + path
@@ -264,36 +264,30 @@ func handleFdAndPathMatch(trace execvePathsTracer, match []string) error {
 		},
 	)
 
-	return nil
+	return true, nil
 }
 
-func handleAbsPathMatch(trace execvePathsTracer, match []string) error {
+func handleAbsPathMatch(trace execvePathsTracer, line string, match []string) (bool, error) {
 	if len(match) == 0 {
-		return nil
-	}
-
-	// if we caught the AT_FDCWD, then return, we are handling that one in the
-	// other pattern
-	if match[4] != "" {
-		return nil
+		return false, nil
 	}
 
 	pid, execStart, syscall, err := parsePIDAndReturnOthers(match)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	// add this path to the tracer's total list of paths
 	trace.addProcessPathAccess(
 		PathAccess{
 			Time:    unixFloatSecondsToTime(execStart),
-			Path:    match[5],
+			Path:    match[4],
 			Syscall: syscall,
 			pid:     pid,
 		},
 	)
 
-	return nil
+	return true, nil
 }
 
 // TraceExecveWithFiles will merge strace logs matching the given pattern and
@@ -394,32 +388,52 @@ func TraceExecveWithFiles(
 			return nil, err
 		}
 
-		// now handle any file accesses
-		match = absPathWithCWDRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match); err != nil {
-			return nil, err
-		}
+		// now handle any file access matches
 
-		match = absPathRE.FindStringSubmatch(line)
-		if err := handleAbsPathMatch(trace, match); err != nil {
-			return nil, err
-		}
-
-		// for the last 2, the fdAndPath matches will also match fdRE, so
-		// if that match is successful then we just skip the last check and
-		// continue to the next line
+		// first up handle any fd matches
 		match = fdAndPathRE.FindStringSubmatch(line)
-		if err := handleFdAndPathMatch(trace, match); err != nil {
+		matched, err := handleFdAndPathMatch(trace, match)
+		if err != nil {
 			return nil, err
 		}
-
-		if len(match) != 0 {
+		if matched {
 			continue
 		}
 
 		match = fdRE.FindStringSubmatch(line)
-		if err := handlePathMatchElem4(trace, match); err != nil {
+		matched, err = handlePathMatchElem4(trace, match)
+		if err != nil {
 			return nil, err
+		}
+		if matched {
+			continue
+		}
+
+		match = absPathWithCWDRE.FindStringSubmatch(line)
+		matched, err = handlePathMatchElem4(trace, match)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			continue
+		}
+
+		match = absPathRE.FindStringSubmatch(line)
+		matched, err = handleAbsPathMatch(trace, line, match)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			continue
+		}
+
+		match = absPathFirstRE.FindStringSubmatch(line)
+		matched, err = handleAbsPathMatch(trace, line, match)
+		if err != nil {
+			return nil, err
+		}
+		if matched {
+			continue
 		}
 	}
 
