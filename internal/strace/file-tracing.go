@@ -62,7 +62,7 @@ var fdAndPathRE = regexp.MustCompile(
 // 121188 1574886788.027966 openat(AT_FDCWD, "/snap/chromium/958/usr/lib/locale/en_US.utf8/LC_COLLATE", O_RDONLY|O_CLOEXEC) = 3</snap/chromium/958/usr/lib/locale/aa_DJ.utf8/LC_COLLATE>
 // 120994 1574886785.937456 readlinkat(AT_FDCWD, "/snap/chromium/current", ""..., 128) = 3
 var absPathWithCWDRE = regexp.MustCompile(
-	`([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(AT_FDCWD,\s+\"(.*?)\".*=\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+	`([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(AT_FDCWD,\s+\"(.*?)\".*=\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<\/.*>$|$)`,
 )
 
 // matches syscalls that have just a single path as any of the arguments, except
