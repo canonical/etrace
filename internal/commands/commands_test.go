@@ -15,7 +15,7 @@
  *
  */
 
-package commands
+package commands_test
 
 import (
 	"io/ioutil"
@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/anonymouse64/etrace/internal/commands"
 	. "gopkg.in/check.v1"
 )
 
@@ -37,6 +38,32 @@ type commandsTestSuite struct {
 var _ = Suite(&commandsTestSuite{})
 
 func (s *commandsTestSuite) SetUpTest(c *C) {
+}
+
+func (s *commandsTestSuite) TestAddSudoIfNeededCaches(c *C) {
+	n := 0
+
+	restore := commands.MockUserCurrent(func() (*user.User, error) {
+		n++
+		return &user.User{
+			Uid: "0",
+		}, nil
+	})
+	defer restore()
+
+	cmd := exec.Command("hello", "world")
+	err := commands.AddSudoIfNeeded(cmd)
+	c.Assert(err, IsNil)
+
+	// only called once so far
+	c.Assert(n, Equals, 1)
+
+	// not called again
+	err = commands.AddSudoIfNeeded(cmd)
+	c.Assert(err, IsNil)
+
+	// only called once so far
+	c.Assert(n, Equals, 1)
 }
 
 func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
@@ -98,7 +125,7 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 
 		// mock the current user
 		if t.uid != "" {
-			restore = MockUserCurrent(func() (*user.User, error) {
+			restore = commands.MockUserCurrent(func() (*user.User, error) {
 				return &user.User{
 					Uid: t.uid,
 				}, nil
@@ -106,7 +133,7 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 		}
 
 		// do the test
-		err := AddSudoIfNeeded(t.cmd, t.sudoArgs...)
+		err := commands.AddSudoIfNeeded(t.cmd, t.sudoArgs...)
 		if t.expectedErrPattern != "" {
 			// check the error
 			c.Assert(err, ErrorMatches, t.expectedErrPattern, Commentf(t.comment))
@@ -125,5 +152,8 @@ func (s *commandsTestSuite) TestAddSudoIfNeeded(c *C) {
 		if t.sudoExists {
 			c.Assert(os.Remove(sudoPath), IsNil, Commentf(t.comment))
 		}
+
+		// reset the caching
+		commands.ResetInitialized()
 	}
 }

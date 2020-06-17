@@ -23,15 +23,24 @@ import (
 	"os/user"
 )
 
-var userCurrent = user.Current
+var (
+	userCurrent     = user.Current
+	userInitialized bool
+	current         *user.User
+)
 
 // AddSudoIfNeeded will prefix the given exec.Cmd with sudo if the current user
 // is not root.
 func AddSudoIfNeeded(cmd *exec.Cmd, sudoArgs ...string) error {
-	current, err := userCurrent()
-	if err != nil {
-		return err
+	if !userInitialized {
+		var err error
+		current, err = userCurrent()
+		if err != nil {
+			return err
+		}
+		userInitialized = true
 	}
+
 	if current.Uid != "0" {
 		sudoPath, err := exec.LookPath("sudo")
 		if err != nil {

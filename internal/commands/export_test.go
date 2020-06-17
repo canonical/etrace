@@ -26,3 +26,7 @@ func MockUserCurrent(new func() (*user.User, error)) (restore func()) {
 		userCurrent = old
 	}
 }
+
+func ResetInitialized() {
+	userInitialized = false
+}
