@@ -29,6 +29,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/anonymouse64/etrace/internal/files"
@@ -252,6 +253,12 @@ func handlePathMatchElem4(trace execvePathsTracer, match []string) (bool, error)
 		return false, err
 	}
 
+	// if the match has "(deleted)" on it, trim that off because that just means
+	// strace lost track of the fd, but the app still would have used it
+	if strings.HasSuffix(match[4], "(deleted)") {
+		match[4] = strings.TrimSuffix(match[4], " (deleted)")
+	}
+
 	// add this path to the tracer's total list of paths
 	trace.addProcessPathAccess(
 		PathAccess{
@@ -277,6 +284,13 @@ func handleFdAndPathMatch(trace execvePathsTracer, match []string) (bool, error)
 
 	// for this, we need to join the fd + path
 	fullPath := filepath.Join(match[4], match[5])
+
+	// if the match has "(deleted)" on it, trim that off because that just means
+	// strace lost track of the fd, but the app still would have used it
+	if strings.HasSuffix(fullPath, "(deleted)") {
+		fullPath = strings.TrimSuffix(fullPath, " (deleted)")
+	}
+
 	trace.addProcessPathAccess(
 		PathAccess{
 			Time:    unixFloatSecondsToTime(execStart),
