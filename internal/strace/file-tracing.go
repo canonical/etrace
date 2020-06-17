@@ -48,8 +48,12 @@ import (
 // 122166 1574886795.484115 newfstatat(3</proc/122166/fd>, "9", {st_mode=S_IFREG|0644, st_size=1377694, ...}, 0) = 0
 // 121041 1574886786.247289 openat(9</snap/chromium/958>, "data-dir", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_DIRECTORY) = 10</snap/chromium/958/data-dir>
 // 121041 1574886786.247289 openat(9</snap/chromium/958>, "data-dir/some-sub-dir", O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_DIRECTORY) = 10</snap/chromium/958/data-dir>
+
+// DOES NOT MATCH lines like:
+// 16513 1592352817.317842 readlinkat(4</proc/1/ns/mnt>, "", ""..., 128) = 16
+
 var fdAndPathRE = regexp.MustCompile(
-	`([0-9]+) ([0-9]+\.[0-9]+) (.*)\([0-9]+<(/.*?)>, "([^\/]?.+)".*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
+	`([0-9]+) ([0-9]+\.[0-9]+) (.*)\([0-9]+<(\/.*?)>, "([^\/\"]?[^\"]+)".*= [0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$|$)`,
 )
 
 // matches syscalls that have AT_FDCWD with an absolute path as the 2nd argument
