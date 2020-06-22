@@ -102,6 +102,13 @@ func (x *cmdExec) Execute(args []string) error {
 	if currentCmd.Repeat > 0 {
 		max = currentCmd.Repeat
 	}
+
+	// TODO: ensure the snap is installed if the option --use-snap-run is set
+
+	// TODO: save the snap state before the loop and automatically restore at
+	//       the end to save on space and make it obvious so that the
+	//       --no-snap-user-data-snapshot can go away and we just "DTRT"
+
 	for i := uint(0); i < max; i++ {
 		// if we were supposed to reinstall the snap before the test, do that
 		// first
