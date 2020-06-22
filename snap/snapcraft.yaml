@@ -35,7 +35,9 @@ parts:
       mkdir -p $SNAPCRAFT_PART_INSTALL/bin
       cd $SNAPCRAFT_PART_SRC
       go build -o $SNAPCRAFT_PART_INSTALL/bin ./...
-    override-pull: |
-      snapcraftctl pull
+    override-prime: |
+      set -e
+      snapcraftctl prime
       cd $SNAPCRAFT_PART_SRC
+      echo "version is being set to $(git describe --tags --always --dirty)"
       snapcraftctl set-version $(git describe --tags --always --dirty)
