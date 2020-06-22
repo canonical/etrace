@@ -1,6 +1,9 @@
 name: etrace
-base: core18
-version: "0.1"
+base: bare
+# build-base of core20 ensures we have the newest version of build-packages such
+# as git
+build-base: core20
+adopt-info: etrace
 summary: etrace traces programs for debugging or performance analysis
 description: |
   etrace is a utility like strace or ltrace which uses ptrace to follow 
@@ -17,11 +20,22 @@ apps:
 
 parts:
   etrace:
-    # TODO: figure out why this doesn't work and why we need gcc as a
-    # build-package
+    # we want static builds
     build-environment:
       - CGO_ENABLED: "0"
+    # we need git for setting the version
     build-packages:
-      - gcc
+      - git
     plugin: go
     source: .
+    # we override the build to do just the first step, the go plugin currently
+    # always will manually link the executables which forces the binaries to
+    # need libc, which we don't need if we set CGO_ENABLED=0
+    override-build: |
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cd $SNAPCRAFT_PART_SRC
+      go build -o $SNAPCRAFT_PART_INSTALL/bin ./...
+    override-pull: |
+      snapcraftctl pull
+      cd $SNAPCRAFT_PART_SRC
+      snapcraftctl set-version $(git describe --tags --always --dirty)
