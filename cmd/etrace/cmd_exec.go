@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -225,13 +226,19 @@ func (x *cmdExec) Execute(args []string) error {
 				installCmd.Args = append(installCmd.Args, "--unaliased")
 			}
 
+			// if the snap revision number doesn't consist of just numbers, it
+			// is a dangerous unasserted revision and needs --dangerous
+			if !regexp.MustCompile("^[0-9]+$").Match([]byte(rev)) {
+				installCmd.Args = append(installCmd.Args, "--dangerous")
+			}
+
 			err = commands.AddSudoIfNeeded(installCmd)
 			if err != nil {
 				return fmt.Errorf("failed to add sudo if needed: %v", err)
 			}
 			_, err = installCmd.CombinedOutput()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to install snap using command %v: %v", installCmd.Args, err)
 			}
 
 			// restore the interface connections
