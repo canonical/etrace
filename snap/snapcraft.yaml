@@ -1,8 +1,8 @@
 name: etrace
 base: bare
-# build-base of core20 ensures we have the newest version of build-packages such
-# as git
-build-base: core20
+# build-base of core18 ensures we have the newest version of build-packages such
+# as git, and we get i386 builds (since there is no i386 core20 snap)
+build-base: core18
 adopt-info: etrace
 summary: etrace traces programs for debugging or performance analysis
 description: |
