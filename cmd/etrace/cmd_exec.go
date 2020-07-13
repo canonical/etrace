@@ -192,6 +192,8 @@ func (x *cmdExec) Execute(args []string) error {
 					// be comma delimited
 					for _, opt := range strings.Split(fields[4], ",") {
 						switch opt {
+						case "try":
+							return fmt.Errorf("snap %s is installed as a try snap, etrace does not yet support reinstalling try snaps", snapName)
 						case "classic":
 							isClassic = true
 						case "devmode":
