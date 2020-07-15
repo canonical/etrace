@@ -56,22 +56,23 @@ type Execution struct {
 }
 
 type cmdExec struct {
-	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
-	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
-	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace           bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs     bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
-	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
-	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	CleanSnapUserData bool     `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
-	ReinstallSnap     bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
+	WindowName                 string   `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript              string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	PrepareScriptArgs          []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
+	RestoreScript              string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScriptArgs          []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	WindowClass                string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace                    bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	RunThroughSnap             bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs              bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog           string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog           string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	JSONOutput                 bool     `short:"j" long:"json" description:"Output results in JSON"`
+	OutputFile                 string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
+	NoWindowWait               bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	CleanSnapUserData          bool     `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
+	ReinstallSnap              bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
+	DoNotReinstallContentSnaps bool     `long:"no-reinstall-content-snaps" description:"When --reinstall-snap is specified, leave content snaps used with this snap installed and don't reinstall them"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -193,6 +194,9 @@ func (x *cmdExec) Execute(args []string) error {
 			if err != nil {
 				return err
 			}
+
+			// TODO: implement DoNotReinstallContentSnaps here with the set of
+			//       snaps we get out of conns
 
 			// get the current snap file for the installed snap
 			rev, err := snaps.Revision(snapName)
