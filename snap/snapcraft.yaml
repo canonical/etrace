@@ -11,7 +11,7 @@ description: |
   also supports limited tracing of file accesses for analyzing what files a
   program accesses during it's execution.
 
-license: GPL-3.0-only
+license: GPL-3.0
 
 grade: stable
 confinement: classic
