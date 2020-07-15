@@ -1,11 +1,23 @@
 # etrace
 [![Actions Status](https://github.com/anonymouse64/etrace/workflows/Go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
 
+
+<iframe src="https://snapcraft.io/etrace/embedded?button=black&channels=true" frameborder="0" width="100%" height="360px" style="border: 1px solid #CCC; border-radius: 2px;"></iframe>
+
 _etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis. It also supports limited tracing of file accesses for analyzing what files a program accesses during it's execution.
 
 ## Installation
 
-This project uses go modules, so the easiest way is to `git clone` it and then `go install` it.
+The easiest way to get etrace is via a snap:
+
+```
+$ snap install etrace
+```
+
+It is currently under active development, and thus it is suggested to install
+from the candidate channel with the `--candidate` option.
+
+Alternatively, this project uses go modules, so you can also `git clone` it and then `go install` it.
 
 ```
 $ git clone https://github.com/anonymouse64/etrace 
