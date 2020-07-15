@@ -56,23 +56,22 @@ type Execution struct {
 }
 
 type cmdExec struct {
-	WindowName                string   `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript             string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	PrepareScriptArgs         []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
-	RestoreScript             string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	RestoreScriptArgs         []string `long:"restore-script-args" description:"Args to provide to the restore script"`
-	WindowClass               string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace                   bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	RunThroughSnap            bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs             bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog          string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog          string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	JSONOutput                bool     `short:"j" long:"json" description:"Output results in JSON"`
-	OutputFile                string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
-	NoWindowWait              bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	DeleteSnapUserData        bool     `long:"delete-snap-user-data" description:"Delete snap user data before executing, by default this will backup the data with snap save before deleting it so the data could be restored, use --no-snap-user-data-snapshot to not create a snapshot"`
-	DoNotSnapshotSnapUserData bool     `long:"no-snap-user-data-snapshot" description:"When used with --delete-snap-user-data, this will prevent automatic snapshots from being created. WARNING THIS RESULTS IN IRREVERSIBLE DATA LOSS"`
-	ReinstallSnap             bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
+	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
+	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	NoTrace           bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	DiscardSnapNs     bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
+	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
+	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	CleanSnapUserData bool     `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
+	ReinstallSnap     bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -108,6 +107,74 @@ func (x *cmdExec) Execute(args []string) error {
 	// TODO: save the snap state before the loop and automatically restore at
 	//       the end to save on space and make it obvious so that the
 	//       --no-snap-user-data-snapshot can go away and we just "DTRT"
+
+	// first if we are operating on a snap, then use snap save to save the data
+	// into a snapshot before running anything
+	snapName := x.Args.Cmd[0]
+
+	if x.CleanSnapUserData {
+		saveCmd := exec.Command("snap", "save", snapName)
+		err := commands.AddSudoIfNeeded(saveCmd)
+		if err != nil {
+			return fmt.Errorf("failed to add sudo to command: %v", err)
+		}
+		saveOut, err := saveCmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to save snapshot of snap user data for snap %s before deleting it: %v (%s)", snapName, err, string(saveOut))
+		}
+
+		// get the snapshot ID from the output
+		s := bufio.NewScanner(bytes.NewReader(saveOut))
+		for s.Scan() {
+			line := s.Text()
+			if strings.Contains(line, snapName) {
+				fields := strings.Fields(line)
+				snapshotID := fields[0]
+
+				// defer a restore of the snapshot ID for this snap
+				defer func() {
+					restoreCmd := exec.Command("snap", "restore", snapshotID, snapName)
+					err := commands.AddSudoIfNeeded(restoreCmd)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to restore snapshot %s for snap %s: %v", snapshotID, snapName, err)
+					}
+					restoreOut, err := restoreCmd.CombinedOutput()
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "failed to restore snapshot %s for snap %s: %v (%s)", snapshotID, snapName, err, string(restoreOut))
+					}
+				}()
+
+				break
+			}
+		}
+
+		// now delete all the /home/*/snap/$SNAP_NAME/ directories, these are
+		// normally not deleted when the snap is removed but the user asked us
+		// to do this explicitly
+		homeSnapUserDataPattern := filepath.Join("/home/*/snap/", snapName)
+		snapUserDataDirs, err := filepath.Glob(homeSnapUserDataPattern)
+		if err != nil {
+			return fmt.Errorf("poorgramming error: glob pattern wrong: %v", err)
+		}
+		// get root's snap user data too if it's there
+		rootSnapUserDataDir := filepath.Join("/root/snap/", snapName)
+		_, err = os.Stat(rootSnapUserDataDir)
+		if err == nil {
+			snapUserDataDirs = append(snapUserDataDirs, rootSnapUserDataDir)
+		}
+
+		for _, dir := range snapUserDataDirs {
+			rmCmd := exec.Command("rm", "-rf", dir)
+			err := commands.AddSudoIfNeeded(rmCmd)
+			if err != nil {
+				return fmt.Errorf("failed to add sudo to command: %v", err)
+			}
+			rmOut, err := rmCmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to delete snap user data directory %s: %v (%s)", dir, err, string(rmOut))
+			}
+		}
+	}
 
 	for i := uint(0); i < max; i++ {
 		// if we were supposed to reinstall the snap before the test, do that
@@ -225,50 +292,6 @@ func (x *cmdExec) Execute(args []string) error {
 				err := snaps.ApplyConnection(conn)
 				if err != nil {
 					return fmt.Errorf("failed to restore connections for snap %s: %v", snapName, err)
-				}
-			}
-		}
-
-		if x.DeleteSnapUserData {
-			snapName := x.Args.Cmd[0]
-
-			// delete all the /home/*/snap/$SNAP_NAME/ directories, these are
-			// normally not deleted but the user asked us to do this anyways
-			homeSnapUserDataPattern := filepath.Join("/home/*/snap/", snapName)
-			snapUserDataDirs, err := filepath.Glob(homeSnapUserDataPattern)
-			if err != nil {
-				return fmt.Errorf("poorgramming error: glob pattern wrong: %v", err)
-			}
-			// get root's snap user data too if it's there
-			rootSnapUserDataDir := filepath.Join("/root/snap/", snapName)
-			_, err = os.Stat(rootSnapUserDataDir)
-			if err == nil {
-				snapUserDataDirs = append(snapUserDataDirs, rootSnapUserDataDir)
-			}
-
-			for _, dir := range snapUserDataDirs {
-				// before deleting the dir, make a snapshot by default unless
-				// the user explicitly told us not to
-				if !x.DoNotSnapshotSnapUserData {
-					saveCmd := exec.Command("snap", "save", snapName)
-					err := commands.AddSudoIfNeeded(saveCmd)
-					if err != nil {
-						return fmt.Errorf("failed to add sudo to command: %v", err)
-					}
-					saveOut, err := saveCmd.CombinedOutput()
-					if err != nil {
-						return fmt.Errorf("failed to save snapshot of snap user data for snap %s before deleting it: %v (%s)", snapName, err, string(saveOut))
-					}
-				}
-
-				rmCmd := exec.Command("rm", "-rf", dir)
-				err := commands.AddSudoIfNeeded(rmCmd)
-				if err != nil {
-					return fmt.Errorf("failed to add sudo to command: %v", err)
-				}
-				rmOut, err := rmCmd.CombinedOutput()
-				if err != nil {
-					return fmt.Errorf("failed to delete snap user data directory %s: %v (%s)", dir, err, string(rmOut))
 				}
 			}
 		}
