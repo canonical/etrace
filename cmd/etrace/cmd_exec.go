@@ -113,43 +113,13 @@ func (x *cmdExec) Execute(args []string) error {
 		// if we were supposed to reinstall the snap before the test, do that
 		// first
 		if x.ReinstallSnap {
-
-			var conns [][]string
 			var isClassic, isDevmode, isJailmode, isUnaliased bool
 			snapName := x.Args.Cmd[0]
 
 			// save interface connections
-			ifacesOut, err := exec.Command("snap", "connections", snapName).CombinedOutput()
+			conns, err := snaps.CurrentConnections(snapName)
 			if err != nil {
-				return fmt.Errorf("failed to save snap connections output: %v (%s)", err, string(ifacesOut))
-			}
-
-			s := bufio.NewScanner(bytes.NewReader(ifacesOut))
-
-			// discard the first line as that's the column headers
-			// but also if a snap has no connections then the output here will
-			// be empty, so we just continue as normal here
-			if s.Scan() {
-				// empty output somehow
-				for s.Scan() {
-					// split each connection by whitespace
-					fields := strings.Fields(s.Text())
-
-					if len(fields) != 4 {
-						return fmt.Errorf("error saving interface state: unexpected number of rows from snap connections output")
-					}
-
-					// ignore disconnected plugs and slots which are indicated
-					// by "-" in the snap connections output
-					if fields[1] == "-" || fields[2] == "-" {
-						continue
-					}
-					// the first column is the interface type which we don't care
-					// about
-					// the second column is the plug, which we do care about
-					// the third column is the slot, which we also care about
-					conns = append(conns, []string{fields[1], fields[2]})
-				}
+				return err
 			}
 
 			// get the current snap file for the installed snap
@@ -178,7 +148,7 @@ func (x *cmdExec) Execute(args []string) error {
 				return fmt.Errorf("failed to get snap info for snap %s: %v (%s)", snapName, err, string(infoOut))
 			}
 
-			s = bufio.NewScanner(bytes.NewReader(infoOut))
+			s := bufio.NewScanner(bytes.NewReader(infoOut))
 
 			for s.Scan() {
 				line := s.Text()
@@ -252,14 +222,9 @@ func (x *cmdExec) Execute(args []string) error {
 
 			// restore the interface connections
 			for _, conn := range conns {
-				connectCmd := exec.Command("snap", "connect", conn[0], conn[1])
-				err := commands.AddSudoIfNeeded(connectCmd)
+				err := snaps.ApplyConnection(conn)
 				if err != nil {
-					return fmt.Errorf("failed to add sudo to command: %v", err)
-				}
-				connectOut, err := connectCmd.CombinedOutput()
-				if err != nil {
-					return fmt.Errorf("failed to restore interface connection for snap %s: %v (%s)", snapName, err, string(connectOut))
+					return fmt.Errorf("failed to restore connections for snap %s: %v", snapName, err)
 				}
 			}
 		}
