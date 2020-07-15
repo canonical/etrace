@@ -104,10 +104,6 @@ func (x *cmdExec) Execute(args []string) error {
 
 	// TODO: ensure the snap is installed if the option --use-snap-run is set
 
-	// TODO: save the snap state before the loop and automatically restore at
-	//       the end to save on space and make it obvious so that the
-	//       --no-snap-user-data-snapshot can go away and we just "DTRT"
-
 	// first if we are operating on a snap, then use snap save to save the data
 	// into a snapshot before running anything
 	snapName := x.Args.Cmd[0]
