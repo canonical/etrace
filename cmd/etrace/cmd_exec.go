@@ -96,6 +96,15 @@ func (x *cmdExec) Execute(args []string) error {
 		w = file
 	}
 
+	if !x.NoWindowWait {
+		// check if we are running on X11, if not then bail because we don't
+		// support graphical window waiting on wayland yet
+		sessionType := os.Getenv("XDG_SESSION_TYPE")
+		if strings.TrimSpace(strings.ToLower(sessionType)) != "x11" {
+			return fmt.Errorf("error: graphical session type %s is unsupported, only x11 is supported", sessionType)
+		}
+	}
+
 	outRes := ExecOutputResult{}
 	max := uint(1)
 	if currentCmd.Repeat > 0 {
