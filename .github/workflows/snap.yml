@@ -1,8 +1,8 @@
-name: Go
+name: Snap
 on: [push, pull_request]
 jobs:
   build:
-    name: Builds the snap
+    name: Snap building
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
