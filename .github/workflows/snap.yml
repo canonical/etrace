@@ -1,0 +1,9 @@
+name: Go
+on: [push, pull_request]
+jobs:
+  build:
+    name: Builds the snap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: snapcore/action-build@v1
