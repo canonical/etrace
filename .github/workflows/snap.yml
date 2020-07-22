@@ -5,5 +5,15 @@ jobs:
     name: Snap building
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: snapcore/action-build@v1
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build the snap
+        uses: snapcore/action-build@v1
+      - name: Rename built snap file
+        run: |
+          sudo mv etrace*.snap etrace.snap
+      - name: Uploading snap artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: etrace.snap
+          path: etrace.snap
