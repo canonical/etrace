@@ -20,5 +20,6 @@ var (
 	FdAndPathRE      = fdAndPathRE
 	AbsPathWithCWDRE = absPathWithCWDRE
 	AbsPathRE        = absPathRE
+	AbsPathFirstRE   = absPathFirstRE
 	FdRE             = fdRE
 )
