@@ -35,6 +35,12 @@ import (
 	"github.com/anonymouse64/etrace/internal/files"
 )
 
+// TODO: support syscalls like mount that have an absolute path we care about
+// but also have a string first argument we don't care about
+
+// TODO: support syscalls like symlinkat to catch multiple file paths, since
+// currently absPathRE will only catch the last one
+
 // matches syscalls that have fd as the first arg and a path as the second arg
 // note that since it's really hard to match whether the fd + path match the
 // desired path, this just matches the fd + path and the code will join them to
@@ -66,14 +72,10 @@ var absPathWithCWDRE = regexp.MustCompile(
 	`([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(AT_FDCWD,\s+\"(.*?)\".*=\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<\/.*>$|$)`,
 )
 
-// matches syscalls that have just a single path as any of the arguments, except
-// those with AT_FDCWD as those cases are handled with absPathWithCWDString
-// above
-// TODO: support syscalls like symlinkat to catch multiple file paths, since
-// we currently will only catch the last one
-// unfortunately we don't have negative lookarounds in go regex, so instead we
-// have an optional group with just AT_FDCWD in it to check if that group is
-// present we can tell if this really matched or not
+// matches syscalls that have just a single absolute path as any of the
+// arguments, except those with AT_FDCWD as those cases are handled with
+// absPathWithCWDString above and also except those that have a string as their
+// first argument
 // TODO: investigate combining this pattern with the absPathWithCWDRE one
 // lines look like:
 // 25251 1588799883.286400 newfstatat(-1, "/sys/kernel/security/apparmor/features", 0x7ffe17b21970, 0) = 0
@@ -86,17 +88,10 @@ var absPathRE = regexp.MustCompile(
 // matches syscalls that have a single path as their first argument, except
 // those with AT_FDCWD as those cases are handled with absPathWithCWDString
 // above
-// TODO: support syscalls like symlinkat to catch multiple file paths, since
-// we currently will only catch the last one
-// unfortunately we don't have negative lookarounds in go regex, so instead we
-// have an optional group with just AT_FDCWD in it to check if that group is
-// present we can tell if this really matched or not
 // TODO: investigate combining this pattern with the absPathWithCWDRE one
 // lines look like:
-// 121372 1574886788.833540 symlinkat("/snap/chromium/958/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules/im-am-et.so", AT_FDCWD, "/home/ijohnson/snap/chromium/common/.cache/immodules/im-am-et.so") = 0
 // 121185 1574886787.979943 execve("/snap/chromium/958/usr/sbin/update-icon-caches", [...], 0x561bce4ee880 /* 105 vars */) = 0
 // 120990 1574886792.229066 readlink("/snap/chromium/958/etc/fonts/conf.d/65-nonlatin.conf", ""..., 4095) = 30
-// 121041 1574886786.249939 mount("tmpfs", "/snap/chromium/958/data-dir/icons", ""..., 0, ""...) = 0
 // 15546 1588797314.955495 readlink("/proc/self/fd/3", ""..., 4096) = 25
 var absPathFirstRE = regexp.MustCompile(
 	`^([0-9]+) ([0-9]+\.[0-9]+) ([a-zA-Z0-9_]+)\(\"([^\"].+?)\".*?\) =\s+[0-9]+(?:\s*$|x[0-9a-f]+$|<.*>$)`,
