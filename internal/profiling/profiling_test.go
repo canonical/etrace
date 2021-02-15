@@ -122,11 +122,11 @@ func (p *profilingTestSuite) TestFreeCaches(c *check.C) {
 		c.Assert(exec, check.Equals, "sudo")
 		switch runs {
 		case 0:
-			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=\x01"})
+			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=1"})
 		case 1:
-			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=\x02"})
+			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=2"})
 		case 2:
-			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=\x03"})
+			c.Assert(args, check.DeepEquals, []string{"sysctl", "-q", "vm.drop_caches=3"})
 		default:
 			c.Fatalf(
 				"unexpected exec call of %v (on %d calls)",
