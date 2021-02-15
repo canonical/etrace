@@ -18,6 +18,7 @@
 package profiling
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -36,7 +37,7 @@ func FreeCaches() error {
 	// calling user, which means we need to do setuid or user priv dropping ...
 	// so just use sudo for now
 	for _, i := range []int{1, 2, 3} {
-		out, err := execCommandCombinedOutput("sudo", "sysctl", "-q", "vm.drop_caches="+string(i))
+		out, err := execCommandCombinedOutput("sudo", "sysctl", "-q", fmt.Sprintf("vm.drop_caches=%d", i))
 		if err != nil {
 			log.Println(string(out))
 			return err
