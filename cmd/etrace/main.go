@@ -48,10 +48,20 @@ func main() {
 	// to drop that because it affects tracing and leads to denials
 	// unfortunately
 
+	// TODO: move this to it's own pkg?
+
 	label, err := ioutil.ReadFile("/proc/self/attr/apparmor/current")
 	if err != nil && !os.IsNotExist(err) {
 		// failed to read apparmor label
 		log.Fatalf("cannot read apparmor label")
+	}
+
+	if os.IsNotExist(err) {
+		// try the legacy apparmor path
+		label, err = ioutil.ReadFile("/proc/self/attr/current")
+		if err != nil && !os.IsNotExist(err) {
+			log.Fatalf("cannot read apparmor label")
+		}
 	}
 
 	// if we read the file successfully, this system has apparmor enabled and we
@@ -98,6 +108,7 @@ func main() {
 	}
 }
 
+// TODO: move this somewhere else
 func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
 }
