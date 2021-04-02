@@ -61,6 +61,7 @@ type cmdExec struct {
 	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
 	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
 	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	KeepVMCaches      bool     `short:"v" long:"keep-vm-caches" description:"Don't free VM caches before executing"`
 	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
 	NoTrace           bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
 	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
@@ -412,17 +413,20 @@ func (x *cmdExec) Execute(args []string) error {
 		} else {
 			// finally fall back to base cmd as the class
 			// note we use the original command and note the processed targetCmd
-			// because for example when measuring a snap, we invoke etrace like so:
+			// because for example when measuring a snap, we invoke etrace like
+			// so:
 			// $ ./etrace run --use-snap chromium
 			// where targetCmd becomes []string{"snap","run","chromium"}
 			// but we still want to use "chromium" as the windowspec class
 			windowspec.Class = filepath.Base(x.Args.Cmd[0])
 		}
 
-		// before running the final command, free the caches to get most accurate
-		// timing
-		if err := profiling.FreeCaches(); err != nil {
-			return err
+		// before running the final command, free the caches to get most
+		// accurate timing
+		if !x.KeepVMCaches {
+			if err := profiling.FreeCaches(); err != nil {
+				return err
+			}
 		}
 
 		// start running the command

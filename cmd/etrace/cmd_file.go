@@ -42,6 +42,7 @@ type cmdFile struct {
 	PrepareScriptArgs    []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
 	RestoreScript        string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
 	RestoreScriptArgs    []string `long:"restore-script-args" description:"Args to provide to the restore script"`
+	KeepVMCaches         bool     `short:"v" long:"keep-vm-caches" description:"Don't free VM caches before executing"`
 	WindowClass          string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
 	RunThroughSnap       bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
 	DiscardSnapNs        bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
@@ -262,9 +263,10 @@ func (x *cmdFile) Execute(args []string) error {
 
 	// before running the final command, free the caches to get most accurate
 	// timing
-
-	if err := profiling.FreeCaches(); err != nil {
-		return err
+	if !x.KeepVMCaches {
+		if err := profiling.FreeCaches(); err != nil {
+			return err
+		}
 	}
 
 	// start running the command
