@@ -113,16 +113,6 @@ func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
 }
 
-// TODO: move to an internal pkg, maybe commands or generalize xdotool?
-func wmctrlCloseWindow(name string) error {
-	out, err := exec.Command("wmctrl", "-c", name).CombinedOutput()
-	if err != nil {
-		log.Println(string(out))
-		return err
-	}
-	return nil
-}
-
 var errs []error
 
 func resetErrors() {

@@ -240,7 +240,6 @@ func (x *cmdFile) Execute(args []string) error {
 	xtool := xdotool.MakeXDoTool()
 
 	tryXToolClose := true
-	tryWmctrl := false
 	var wids []string
 
 	windowspec := xdotool.Window{}
@@ -297,7 +296,6 @@ func (x *cmdFile) Execute(args []string) error {
 			pid, err := xtool.PidForWindowID(wid)
 			if err != nil {
 				logError(fmt.Errorf("getting pid for wid %s: %w", wid, err))
-				tryWmctrl = true
 				break
 			}
 			pids[i] = pid
@@ -308,7 +306,6 @@ func (x *cmdFile) Execute(args []string) error {
 			err = xtool.CloseWindowID(wid)
 			if err != nil {
 				logError(fmt.Errorf("closing window: %w", err))
-				tryWmctrl = true
 			}
 		}
 
@@ -320,16 +317,8 @@ func (x *cmdFile) Execute(args []string) error {
 				// if the process already exited then try wmctrl
 				if !strings.Contains(err.Error(), "process already finished") {
 					logError(fmt.Errorf("killing window process pid %d: %w", pid, err))
-					tryWmctrl = true
 				}
 			}
-		}
-	}
-
-	if tryWmctrl {
-		err = wmctrlCloseWindow(x.WindowName)
-		if err != nil {
-			logError(fmt.Errorf("closing window with wmctrl: %w", err))
 		}
 	}
 
