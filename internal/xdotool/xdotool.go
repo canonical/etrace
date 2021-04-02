@@ -31,8 +31,9 @@ type xdotool struct{}
 
 // Window represents a X11 window
 type Window struct {
-	Class string
-	Name  string
+	Class     string
+	ClassName string
+	Name      string
 }
 
 func (w Window) windowSpecErrDescription() string {
@@ -40,6 +41,8 @@ func (w Window) windowSpecErrDescription() string {
 		return fmt.Sprintf("class %s", w.Class)
 	} else if w.Name != "" {
 		return fmt.Sprintf("name %s", w.Name)
+	} else if w.ClassName != "" {
+		return fmt.Sprintf("class name %s", w.ClassName)
 	} else {
 		return "no specification"
 	}
@@ -50,6 +53,8 @@ func (w Window) searchArgs() []string {
 		return []string{"--class", w.Class}
 	} else if w.Name != "" {
 		return []string{"--name", w.Name}
+	} else if w.ClassName != "" {
+		return []string{"--classname", w.ClassName}
 	}
 	return nil
 }
