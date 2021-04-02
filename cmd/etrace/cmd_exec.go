@@ -72,6 +72,10 @@ type straceResult struct {
 }
 
 func (x *cmdExec) Execute(args []string) error {
+	if currentCmd.RunThroughFlatpak && currentCmd.RunThroughSnap {
+		return fmt.Errorf("cannot run through both flatpak and snap at same time")
+	}
+
 	// check the output file
 	w := os.Stdout
 	if currentCmd.OutputFile != "" {
@@ -307,6 +311,8 @@ func (x *cmdExec) Execute(args []string) error {
 		targetCmd := x.Args.Cmd
 		if currentCmd.RunThroughSnap {
 			targetCmd = append([]string{"snap", "run"}, targetCmd...)
+		} else if currentCmd.RunThroughFlatpak {
+			targetCmd = append([]string{"flatpak", "run"}, targetCmd...)
 		}
 
 		doneCh := make(chan straceResult, 1)
@@ -403,15 +409,24 @@ func (x *cmdExec) Execute(args []string) error {
 		} else if currentCmd.WindowName != "" {
 			// then window name
 			windowspec.Name = currentCmd.WindowName
+		} else if currentCmd.WindowClassName != "" {
+			// then window class name
+			windowspec.ClassName = currentCmd.WindowClassName
 		} else {
-			// finally fall back to base cmd as the class
-			// note we use the original command and note the processed targetCmd
-			// because for example when measuring a snap, we invoke etrace like
-			// so:
-			// $ ./etrace run --use-snap chromium
-			// where targetCmd becomes []string{"snap","run","chromium"}
-			// but we still want to use "chromium" as the windowspec class
-			windowspec.Class = filepath.Base(x.Args.Cmd[0])
+			// finally fall back to base cmd as the class or classname
+			if currentCmd.RunThroughFlatpak {
+				// for flatpak apps, we can use the name of the app (i.e.
+				// org.gabmus.whatip) as the classname consistently
+				windowspec.ClassName = x.Args.Cmd[0]
+			} else {
+				// note we use the original command and note the processed targetCmd
+				// because for example when measuring a snap, we invoke etrace like
+				// so:
+				// $ ./etrace run --use-snap chromium
+				// where targetCmd becomes []string{"snap","run","chromium"}
+				// but we still want to use "chromium" as the windowspec class
+				windowspec.Class = filepath.Base(x.Args.Cmd[0])
+			}
 		}
 
 		// before running the final command, free the caches to get most

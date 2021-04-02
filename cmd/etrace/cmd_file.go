@@ -57,6 +57,9 @@ type FileOutputResult struct {
 }
 
 func (x *cmdFile) Execute(args []string) error {
+	if currentCmd.RunThroughFlatpak {
+		return fmt.Errorf("file tracing with flatpak not yet supported")
+	}
 	if !currentCmd.NoWindowWait {
 		// check if we are running on X11, if not then bail because we don't
 		// support graphical window waiting on wayland yet
@@ -245,6 +248,9 @@ func (x *cmdFile) Execute(args []string) error {
 	} else if currentCmd.WindowName != "" {
 		// then window name
 		windowspec.Name = currentCmd.WindowName
+	} else if currentCmd.WindowClassName != "" {
+		// then window class name
+		windowspec.ClassName = currentCmd.WindowClassName
 	} else {
 		// finally fall back to base cmd as the class
 		// note we use the original command and note the processed targetCmd
