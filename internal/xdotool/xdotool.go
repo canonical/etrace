@@ -20,7 +20,8 @@
 package xdotool
 
 import (
-	"log"
+	"bytes"
+	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -32,6 +33,25 @@ type xdotool struct{}
 type Window struct {
 	Class string
 	Name  string
+}
+
+func (w Window) windowSpecErrDescription() string {
+	if w.Class != "" {
+		return fmt.Sprintf("class %s", w.Class)
+	} else if w.Name != "" {
+		return fmt.Sprintf("name %s", w.Name)
+	} else {
+		return "no specification"
+	}
+}
+
+func (w Window) searchArgs() []string {
+	if w.Class != "" {
+		return []string{"--class", w.Class}
+	} else if w.Name != "" {
+		return []string{"--name", w.Name}
+	}
+	return nil
 }
 
 // Xtooler works with xdotool to perform various operations on X11 windows
@@ -47,30 +67,11 @@ func MakeXDoTool() Xtooler {
 }
 
 func (x *xdotool) WaitForWindow(w Window) ([]string, error) {
-	if w.Class != "" {
-		return x.waitForWindowArgs([]string{"--class", w.Class})
-	} else if w.Name != "" {
-		return x.waitForWindowArgs([]string{"--name", w.Name})
-	} else {
-		// what was I thinking here again?
+	searchArgs := w.searchArgs()
+	if searchArgs == nil {
+		return nil, fmt.Errorf("window specification is empty")
 	}
-	windowids := []string{}
-	var err error
-	out := []byte{}
-	for i := 0; i < 10; i++ {
-		out, err = exec.Command("xdotool", "search", "--sync", "--onlyvisible", "--class", w.Class).CombinedOutput()
-		if err != nil {
-			continue
-		}
-		windowids = strings.Split(strings.TrimSpace(string(out)), "\n")
-		return windowids, nil
-	}
-	log.Println(string(out))
-	return nil, err
-}
 
-func (x *xdotool) waitForWindowArgs(searchArgs []string) ([]string, error) {
-	windowids := []string{}
 	var err error
 	out := []byte{}
 	for i := 0; i < 10; i++ {
@@ -78,18 +79,15 @@ func (x *xdotool) waitForWindowArgs(searchArgs []string) ([]string, error) {
 		if err != nil {
 			continue
 		}
-		windowids = strings.Split(strings.TrimSpace(string(out)), "\n")
-		return windowids, nil
+		return strings.Split(strings.TrimSpace(string(out)), "\n"), nil
 	}
-	log.Println(string(out))
-	return nil, err
+	return nil, fmt.Errorf("xdotool failed to find window with %s: %v", w.windowSpecErrDescription(), outputErr(out, err))
 }
 
 func (x *xdotool) CloseWindowID(wid string) error {
 	out, err := exec.Command("xdotool", "windowkill", wid).CombinedOutput()
 	if err != nil {
-		log.Println(string(out))
-		return err
+		return fmt.Errorf("xdotool failed to close window ID %s: %v", wid, outputErr(out, err))
 	}
 	return nil
 }
@@ -97,8 +95,22 @@ func (x *xdotool) CloseWindowID(wid string) error {
 func (x *xdotool) PidForWindowID(wid string) (int, error) {
 	out, err := exec.Command("xdotool", "getwindowpid", wid).CombinedOutput()
 	if err != nil {
-		log.Println(string(out))
-		return 0, err
+		return 0, fmt.Errorf("xdotool failed to get pid for window ID %s: %v", wid, outputErr(out, err))
 	}
 	return strconv.Atoi(strings.TrimSpace(string(out)))
+}
+
+// outputErr formats an error based on output if its length is not zero,
+// or returns err otherwise.
+// copied from osutil package in snapd to avoid having to directly import snapd
+func outputErr(output []byte, err error) error {
+	output = bytes.TrimSpace(output)
+	if len(output) > 0 {
+		if bytes.Contains(output, []byte{'\n'}) {
+			err = fmt.Errorf("\n-----\n%s\n-----", output)
+		} else {
+			err = fmt.Errorf("%s", output)
+		}
+	}
+	return err
 }
