@@ -99,11 +99,17 @@ func (x *cmdExec) Execute(args []string) error {
 		max = x.Repeat
 	}
 
-	// TODO: ensure the snap is installed if the option --use-snap-run is set
-
 	// first if we are operating on a snap, then use snap save to save the data
 	// into a snapshot before running anything
 	snapName := x.Args.Cmd[0]
+
+	// check if the snap is installed first if --use-snap-run is specified
+	if currentCmd.RunThroughSnap {
+		if _, err := exec.Command("snap", "list", snapName).CombinedOutput(); err != nil {
+			// then the snap is assumed to not be installed
+			return fmt.Errorf("snap %s is not installed", snapName)
+		}
+	}
 
 	if x.CleanSnapUserData {
 		saveCmd := exec.Command("snap", "save", snapName)
