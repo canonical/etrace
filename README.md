@@ -37,31 +37,33 @@ Usage:
   etrace [OPTIONS] exec [exec-OPTIONS] Cmd...
 
 Application Options:
-  -e, --errors                   Show errors as they happen
-  -n, --repeat=                  Number of times to repeat each task
+  -e, --errors                    Show errors as they happen
+  -n, --repeat=                   Number of times to repeat each task
+  -w, --window-name=              Window name to wait for
+  -p, --prepare-script=           Script to run to prepare a run
+      --prepare-script-args=      Args to provide to the prepare script
+  -r, --restore-script=           Script to run to restore after a run
+      --restore-script-args=      Args to provide to the restore script
+  -v, --keep-vm-caches            Don't free VM caches before executing
+  -c, --class-name=               Window class to use with xdotool instead of the the first Command
+  -s, --use-snap-run              Run command through snap run
+  -d, --discard-snap-ns           Discard the snap namespace before running the snap
+      --cmd-stdout=               Log file for run command's stdout
+      --cmd-stderr=               Log file for run command's stderr
+  -j, --json                      Output results in JSON
+  -o, --output-file=              A file to output the results (empty string means stdout)
+      --no-window-wait            Don't wait for the window to appear, just run until the program exits
 
 Help Options:
-  -h, --help                     Show this help message
+  -h, --help                      Show this help message
 
 [exec command options]
-      -w, --window-name=         Window name to wait for
-      -p, --prepare-script=      Script to run to prepare a run
-          --prepare-script-args= Args to provide to the prepare script
-      -r, --restore-script=      Script to run to restore after a run
-          --restore-script-args= Args to provide to the restore script
-      -c, --class-name=          Window class to use with xdotool instead of the the first Command
-      -t, --no-trace             Don't trace the process, just time the total execution
-      -s, --use-snap-run         Run command through snap run
-      -d, --discard-snap-ns      Discard the snap namespace before running the snap
-          --cmd-stdout=          Log file for run command's stdout
-          --cmd-stderr=          Log file for run command's stderr
-      -j, --json                 Output results in JSON
-      -o, --output-file=         A file to output the results (empty string means stdout)
-          --no-window-wait       Don't wait for the window to appear, just run until the program exits
+      -t, --no-trace              Don't trace the process, just time the total execution
+          --clean-snap-user-data  Delete snap user data before executing and restore after execution
+          --reinstall-snap        Reinstall the snap before executing, restoring any existing interface connections for the snap
 
 [exec command arguments]
-  Cmd:                           Command to run
-
+  Cmd:                            Command to run
 ```
 
 ### `file` subcommand
@@ -75,30 +77,35 @@ Usage:
   etrace [OPTIONS] file [file-OPTIONS] Cmd...
 
 Application Options:
-  -e, --errors                   Show errors as they happen
-  -n, --repeat=                  Number of times to repeat each task
+  -e, --errors                      Show errors as they happen
+  -n, --repeat=                     Number of times to repeat each task
+  -w, --window-name=                Window name to wait for
+  -p, --prepare-script=             Script to run to prepare a run
+      --prepare-script-args=        Args to provide to the prepare script
+  -r, --restore-script=             Script to run to restore after a run
+      --restore-script-args=        Args to provide to the restore script
+  -v, --keep-vm-caches              Don't free VM caches before executing
+  -c, --class-name=                 Window class to use with xdotool instead of the the first Command
+  -s, --use-snap-run                Run command through snap run
+  -d, --discard-snap-ns             Discard the snap namespace before running the snap
+      --cmd-stdout=                 Log file for run command's stdout
+      --cmd-stderr=                 Log file for run command's stderr
+  -j, --json                        Output results in JSON
+  -o, --output-file=                A file to output the results (empty string means stdout)
+      --no-window-wait              Don't wait for the window to appear, just run until the program exits
 
 Help Options:
-  -h, --help                     Show this help message
+  -h, --help                        Show this help message
 
 [file command options]
-      -w, --window-name=         Window name to wait for
-      -p, --prepare-script=      Script to run to prepare a run
-          --prepare-script-args= Args to provide to the prepare script
-      -r, --restore-script=      Script to run to restore after a run
-          --restore-script-args= Args to provide to the restore script
-      -c, --class-name=          Window class to use with xdotool instead of the the first Command
-      -s, --use-snap-run         Run command through snap run
-      -d, --discard-snap-ns      Discard the snap namespace before running the snap
-          --cmd-stdout=          Log file for run command's stdout
-          --cmd-stderr=          Log file for run command's stderr
-      -j, --json                 Output results in JSON
-      -o, --output-file=         A file to output the results (empty string means stdout)
-          --no-window-wait       Don't wait for the window to appear, just run until the program exits
+          --file-regex=             Regular expression of files to return, if empty all files are returned
+          --parent-dirs=            List of parent directories matching files must be underneath to match
+          --program-regex=          Regular expression of programs whose file accesses should be returned
+          --include-snapd-programs  Include snapd programs whose file accesses match in the list of files accessed
+          --show-programs           Show programs that accessed the files
 
 [file command arguments]
-  Cmd:                           Command to run
-
+  Cmd:                              Command to run
 ```
 
 
