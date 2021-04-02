@@ -421,17 +421,19 @@ func (x *cmdExec) Execute(args []string) error {
 
 		// before running the final command, free the caches to get most accurate
 		// timing
-		err := profiling.FreeCaches()
-		if err != nil {
+		if err := profiling.FreeCaches(); err != nil {
 			return err
 		}
 
 		// start running the command
 		start := time.Now()
-		err = cmd.Start()
+		if err := cmd.Start(); err != nil {
+			return err
+		}
 
 		if !x.NoWindowWait {
 			// now wait until the window appears
+			var err error
 			wids, err = xtool.WaitForWindow(windowspec)
 			if err != nil {
 				logError(fmt.Errorf("waiting for window appearance: %w", err))
@@ -466,8 +468,7 @@ func (x *cmdExec) Execute(args []string) error {
 
 			// close the windows
 			for _, wid := range wids {
-				err = xtool.CloseWindowID(wid)
-				if err != nil {
+				if err := xtool.CloseWindowID(wid); err != nil {
 					logError(fmt.Errorf("closing window: %w", err))
 				}
 			}
