@@ -56,23 +56,9 @@ type Execution struct {
 }
 
 type cmdExec struct {
-	WindowName        string   `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript     string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	PrepareScriptArgs []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
-	RestoreScript     string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	RestoreScriptArgs []string `long:"restore-script-args" description:"Args to provide to the restore script"`
-	KeepVMCaches      bool     `short:"v" long:"keep-vm-caches" description:"Don't free VM caches before executing"`
-	WindowClass       string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	NoTrace           bool     `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
-	RunThroughSnap    bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	DiscardSnapNs     bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog  string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog  string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	JSONOutput        bool     `short:"j" long:"json" description:"Output results in JSON"`
-	OutputFile        string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
-	NoWindowWait      bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	CleanSnapUserData bool     `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
-	ReinstallSnap     bool     `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
+	NoTrace           bool `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
+	CleanSnapUserData bool `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
+	ReinstallSnap     bool `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -87,17 +73,17 @@ type straceResult struct {
 func (x *cmdExec) Execute(args []string) error {
 	// check the output file
 	w := os.Stdout
-	if x.OutputFile != "" {
+	if currentCmd.OutputFile != "" {
 		// TODO: add option for appending?
 		// if the file already exists, delete it and open a new file
-		file, err := files.EnsureExistsAndOpen(x.OutputFile, true)
+		file, err := files.EnsureExistsAndOpen(currentCmd.OutputFile, true)
 		if err != nil {
 			return err
 		}
 		w = file
 	}
 
-	if !x.NoWindowWait {
+	if !currentCmd.NoWindowWait {
 		// check if we are running on X11, if not then bail because we don't
 		// support graphical window waiting on wayland yet
 		sessionType := os.Getenv("XDG_SESSION_TYPE")
@@ -303,8 +289,8 @@ func (x *cmdExec) Execute(args []string) error {
 		}
 
 		// run the prepare script if it's available
-		if x.PrepareScript != "" {
-			err := profiling.RunScript(x.PrepareScript, x.PrepareScriptArgs)
+		if currentCmd.PrepareScript != "" {
+			err := profiling.RunScript(currentCmd.PrepareScript, currentCmd.PrepareScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running prepare script: %w", err))
 			}
@@ -312,7 +298,7 @@ func (x *cmdExec) Execute(args []string) error {
 
 		// handle if the command should be run through `snap run`
 		targetCmd := x.Args.Cmd
-		if x.RunThroughSnap {
+		if currentCmd.RunThroughSnap {
 			targetCmd = append([]string{"snap", "run"}, targetCmd...)
 		}
 
@@ -369,16 +355,16 @@ func (x *cmdExec) Execute(args []string) error {
 
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if x.ProgramStdoutLog != "" {
-			f, err := files.EnsureExistsAndOpen(x.ProgramStdoutLog, false)
+		if currentCmd.ProgramStdoutLog != "" {
+			f, err := files.EnsureExistsAndOpen(currentCmd.ProgramStdoutLog, false)
 			if err != nil {
 				return err
 			}
 			defer f.Close()
 			cmd.Stdout = f
 		}
-		if x.ProgramStderrLog != "" {
-			f, err := files.EnsureExistsAndOpen(x.ProgramStderrLog, false)
+		if currentCmd.ProgramStderrLog != "" {
+			f, err := files.EnsureExistsAndOpen(currentCmd.ProgramStderrLog, false)
 			if err != nil {
 				return err
 			}
@@ -386,8 +372,8 @@ func (x *cmdExec) Execute(args []string) error {
 			cmd.Stderr = f
 		}
 
-		if x.DiscardSnapNs {
-			if !x.RunThroughSnap {
+		if currentCmd.DiscardSnapNs {
+			if !currentCmd.RunThroughSnap {
 				return errors.New("cannot use --discard-snap-ns without --use-snap-run")
 			}
 			// the name of the snap in this case is the first argument
@@ -404,12 +390,12 @@ func (x *cmdExec) Execute(args []string) error {
 
 		windowspec := xdotool.Window{}
 		// check which opts are defined
-		if x.WindowClass != "" {
+		if currentCmd.WindowClass != "" {
 			// prefer window class from option
-			windowspec.Class = x.WindowClass
-		} else if x.WindowName != "" {
+			windowspec.Class = currentCmd.WindowClass
+		} else if currentCmd.WindowName != "" {
 			// then window name
-			windowspec.Name = x.WindowName
+			windowspec.Name = currentCmd.WindowName
 		} else {
 			// finally fall back to base cmd as the class
 			// note we use the original command and note the processed targetCmd
@@ -423,7 +409,7 @@ func (x *cmdExec) Execute(args []string) error {
 
 		// before running the final command, free the caches to get most
 		// accurate timing
-		if !x.KeepVMCaches {
+		if !currentCmd.KeepVMCaches {
 			if err := profiling.FreeCaches(); err != nil {
 				return err
 			}
@@ -435,7 +421,7 @@ func (x *cmdExec) Execute(args []string) error {
 			return err
 		}
 
-		if !x.NoWindowWait {
+		if !currentCmd.NoWindowWait {
 			// now wait until the window appears
 			var err error
 			wids, err = xtool.WaitForWindow(windowspec)
@@ -446,7 +432,7 @@ func (x *cmdExec) Execute(args []string) error {
 			}
 		}
 
-		if x.NoWindowWait || len(wids) == 0 {
+		if currentCmd.NoWindowWait || len(wids) == 0 {
 			// if we aren't waiting on the window class, then just wait for the
 			// command to return
 			if err := cmd.Wait(); err != nil {
@@ -501,7 +487,7 @@ func (x *cmdExec) Execute(args []string) error {
 			if straceRes.err == nil {
 				slg = straceRes.timings
 				// make a new tabwriter to stderr
-				if !x.JSONOutput {
+				if !currentCmd.JSONOutput {
 					wtab := tabWriterGeneric(w)
 					slg.Display(wtab, nil)
 				}
@@ -511,8 +497,8 @@ func (x *cmdExec) Execute(args []string) error {
 			}
 		}
 
-		if x.RestoreScript != "" {
-			err := profiling.RunScript(x.RestoreScript, x.RestoreScriptArgs)
+		if currentCmd.RestoreScript != "" {
+			err := profiling.RunScript(currentCmd.RestoreScript, currentCmd.RestoreScriptArgs)
 			if err != nil {
 				logError(fmt.Errorf("running restore script: %w", err))
 			}
@@ -534,14 +520,14 @@ func (x *cmdExec) Execute(args []string) error {
 		// add the run to our result
 		outRes.Runs = append(outRes.Runs, run)
 
-		if !x.JSONOutput {
+		if !currentCmd.JSONOutput {
 			fmt.Fprintln(w, "Total startup time:", startup)
 		}
 
 		resetErrors()
 	}
 
-	if x.JSONOutput {
+	if currentCmd.JSONOutput {
 		json.NewEncoder(w).Encode(outRes)
 	}
 
