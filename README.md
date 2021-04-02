@@ -38,7 +38,6 @@ Usage:
 
 Application Options:
   -e, --errors                    Show errors as they happen
-  -n, --repeat=                   Number of times to repeat each task
   -w, --window-name=              Window name to wait for
   -p, --prepare-script=           Script to run to prepare a run
       --prepare-script-args=      Args to provide to the prepare script
@@ -61,6 +60,7 @@ Help Options:
       -t, --no-trace              Don't trace the process, just time the total execution
           --clean-snap-user-data  Delete snap user data before executing and restore after execution
           --reinstall-snap        Reinstall the snap before executing, restoring any existing interface connections for the snap
+      -n, --repeat=               Number of times to repeat each task
 
 [exec command arguments]
   Cmd:                            Command to run
@@ -78,7 +78,6 @@ Usage:
 
 Application Options:
   -e, --errors                      Show errors as they happen
-  -n, --repeat=                     Number of times to repeat each task
   -w, --window-name=                Window name to wait for
   -p, --prepare-script=             Script to run to prepare a run
       --prepare-script-args=        Args to provide to the prepare script

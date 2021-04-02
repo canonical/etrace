@@ -59,6 +59,7 @@ type cmdExec struct {
 	NoTrace           bool `short:"t" long:"no-trace" description:"Don't trace the process, just time the total execution"`
 	CleanSnapUserData bool `long:"clean-snap-user-data" description:"Delete snap user data before executing and restore after execution"`
 	ReinstallSnap     bool `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
+	Repeat            uint `short:"n" long:"repeat" description:"Number of times to repeat each task"`
 
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
@@ -94,8 +95,8 @@ func (x *cmdExec) Execute(args []string) error {
 
 	outRes := ExecOutputResult{}
 	max := uint(1)
-	if currentCmd.Repeat > 0 {
-		max = currentCmd.Repeat
+	if x.Repeat > 0 {
+		max = x.Repeat
 	}
 
 	// TODO: ensure the snap is installed if the option --use-snap-run is set

@@ -36,7 +36,6 @@ type Command struct {
 	File       cmdFile `command:"file" description:"Trace files accessed from a program"`
 	Exec       cmdExec `command:"exec" description:"Trace the program executions from a program"`
 	ShowErrors bool    `short:"e" long:"errors" description:"Show errors as they happen"`
-	Repeat     uint    `short:"n" long:"repeat" description:"Number of times to repeat each task"`
 	WindowName           string   `short:"w" long:"window-name" description:"Window name to wait for"`
 	PrepareScript        string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
 	PrepareScriptArgs    []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
