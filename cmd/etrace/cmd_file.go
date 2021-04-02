@@ -66,6 +66,14 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
+	// check if the snap is installed first if --use-snap-run is specified
+	if currentCmd.RunThroughSnap {
+		if _, err := exec.Command("snap", "list", x.Args.Cmd[0]).CombinedOutput(); err != nil {
+			// then the snap is assumed to not be installed
+			return fmt.Errorf("snap %s is not installed", x.Args.Cmd[0])
+		}
+	}
+
 	// check the output file
 	w := os.Stdout
 	if currentCmd.OutputFile != "" {
