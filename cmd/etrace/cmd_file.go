@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +35,7 @@ import (
 	"github.com/anonymouse64/etrace/internal/snaps"
 	"github.com/anonymouse64/etrace/internal/strace"
 	"github.com/anonymouse64/etrace/internal/xdotool"
+	"golang.org/x/net/context"
 )
 
 type cmdFile struct {
@@ -235,6 +237,15 @@ func (x *cmdFile) Execute(args []string) error {
 		excludeListProgramPatterns = []string{}
 	}
 
+	windowWaitTimeout := time.Duration(math.MaxInt64)
+	if currentCmd.WindowWaitGlobalTimeout != "" {
+		duration, err := time.ParseDuration(currentCmd.WindowWaitGlobalTimeout)
+		if err != nil {
+			return err
+		}
+		windowWaitTimeout = duration
+	}
+
 	xtool := xdotool.MakeXDoTool()
 
 	tryXToolClose := true
@@ -280,9 +291,18 @@ func (x *cmdFile) Execute(args []string) error {
 		// command to return
 		cmd.Wait()
 	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), windowWaitTimeout)
+		defer cancel()
 		// now wait until the window appears
-		wids, err = xtool.WaitForWindow(windowspec)
-		if err != nil {
+		wids, err = xtool.WaitForWindow(ctx, windowspec)
+		if errors.Is(err, context.DeadlineExceeded) {
+			// we timed out waiting for the process, just kill the main
+			// command and return an error
+			if err := cmd.Process.Kill(); err != nil {
+				logError(err)
+			}
+			return err
+		} else if err != nil {
 			logError(fmt.Errorf("waiting for window appearance: %w", err))
 			// if we don't get the wid properly then we can't try closing
 			tryXToolClose = false
