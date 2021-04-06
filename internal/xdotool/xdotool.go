@@ -21,6 +21,7 @@ package xdotool
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
@@ -61,7 +62,7 @@ func (w Window) searchArgs() []string {
 
 // Xtooler works with xdotool to perform various operations on X11 windows
 type Xtooler interface {
-	WaitForWindow(w Window) ([]string, error)
+	WaitForWindow(ctx context.Context, w Window) ([]string, error)
 	CloseWindowID(wid string) error
 	PidForWindowID(wid string) (int, error)
 }
@@ -71,7 +72,7 @@ func MakeXDoTool() Xtooler {
 	return &xdotool{}
 }
 
-func (x *xdotool) WaitForWindow(w Window) ([]string, error) {
+func (x *xdotool) WaitForWindow(ctx context.Context, w Window) ([]string, error) {
 	searchArgs := w.searchArgs()
 	if searchArgs == nil {
 		return nil, fmt.Errorf("window specification is empty")
@@ -80,10 +81,16 @@ func (x *xdotool) WaitForWindow(w Window) ([]string, error) {
 	var err error
 	out := []byte{}
 	for i := 0; i < 10; i++ {
-		out, err = exec.Command("xdotool", append([]string{"search", "--sync", "--onlyvisible"}, searchArgs...)...).CombinedOutput()
+		out, err = exec.CommandContext(ctx, "xdotool", append([]string{"search", "--sync", "--onlyvisible"}, searchArgs...)...).CombinedOutput()
 		if err != nil {
+			// check specifically for deadline exceeded error, if so give up,
+			// otherwise keep trying
+			if ctx.Err() == context.DeadlineExceeded {
+				return nil, fmt.Errorf("timed out waiting for window with %s to appear: %w", w.windowSpecErrDescription(), ctx.Err())
+			}
 			continue
 		}
+		// TODO: return better error if we timeout due to context expiration?
 		return strings.Split(strings.TrimSpace(string(out)), "\n"), nil
 	}
 	return nil, fmt.Errorf("xdotool failed to find window with %s: %v", w.windowSpecErrDescription(), outputErr(out, err))
