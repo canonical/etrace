@@ -356,16 +356,6 @@ func (x *cmdFile) Execute(args []string) error {
 		logError(fmt.Errorf("cannot extract runtime data: %w", err))
 	}
 
-	if !currentCmd.JSONOutput {
-		// make a new tabwriter to stderr
-		wtab := tabWriterGeneric(w)
-		opts := &strace.DisplayOptions{}
-		if !x.ShowPrograms {
-			opts.NoDisplayPrograms = true
-		}
-		execFiles.Display(wtab, opts)
-	}
-
 	if currentCmd.RestoreScript != "" {
 		err := profiling.RunScript(currentCmd.RestoreScript, currentCmd.RestoreScriptArgs)
 		if err != nil {
@@ -373,18 +363,24 @@ func (x *cmdFile) Execute(args []string) error {
 		}
 	}
 
-	outRes := FileOutputResult{
-		TimeToDisplay: startup,
-		Errors:        errs,
-		ExecvePaths:   execFiles,
-	}
-
-	// if we're not tracing then just use startup time as time to run
-
+	// output the result either in JSON or using the execve files result
+	// Display() method
 	if currentCmd.JSONOutput {
+		outRes := FileOutputResult{
+			TimeToDisplay: startup,
+			Errors:        errs,
+			ExecvePaths:   execFiles,
+		}
 		json.NewEncoder(w).Encode(outRes)
 	} else {
-		fmt.Fprintln(w, "Total startup time:", startup)
+		// make a new tabwriter to stderr
+		wtab := tabWriterGeneric(w)
+		opts := &strace.DisplayOptions{}
+		if !x.ShowPrograms {
+			opts.NoDisplayPrograms = true
+		}
+		execFiles.Display(wtab, opts)
+
 	}
 
 	return nil
