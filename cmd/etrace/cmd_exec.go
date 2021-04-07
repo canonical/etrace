@@ -563,7 +563,7 @@ func (x *cmdExec) Execute(args []string) error {
 		outRes.Runs = append(outRes.Runs, run)
 
 		if !currentCmd.JSONOutput {
-			fmt.Fprintln(w, "Total startup time:", startup)
+			fmt.Fprintln(w, "Total startup time:", startup.Seconds())
 		}
 
 		resetErrors()
