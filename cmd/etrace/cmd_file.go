@@ -53,9 +53,9 @@ type cmdFile struct {
 // FileOutputResult is the result of running a command with various information
 // encoded in it
 type FileOutputResult struct {
-	ExecvePaths   *strace.ExecvePaths
-	TimeToDisplay time.Duration
-	Errors        []error
+	ExecvePaths   *strace.ExecvePaths `json:",omitempty"`
+	TimeToDisplay time.Duration       `json:",omitempty"`
+	Errors        []error             `json:",omitempty"`
 }
 
 func (x *cmdFile) Execute(args []string) error {

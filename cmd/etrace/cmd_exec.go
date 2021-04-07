@@ -51,10 +51,10 @@ type ExecOutputResult struct {
 
 // Execution represents a single run
 type Execution struct {
-	ExecveTiming  *strace.ExecveTiming
-	TimeToDisplay time.Duration
-	TimeToRun     time.Duration
-	Errors        []error
+	ExecveTiming  *strace.ExecveTiming `json:",omitempty"`
+	TimeToDisplay time.Duration        `json:",omitempty"`
+	TimeToRun     time.Duration        `json:",omitempty"`
+	Errors        []error              `json:",omitempty"`
 }
 
 type cmdExec struct {
