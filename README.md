@@ -1,6 +1,7 @@
 # etrace
 [![Actions Status](https://github.com/anonymouse64/etrace/workflows/Go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
 [![etrace](https://snapcraft.io//etrace/badge.svg)](https://snapcraft.io/etrace)
+[![Go Report Card](https://goreportcard.com/badge/github.com/canonical/etrace)](https://goreportcard.com/report/github.com/canonical/etrace)
 
 _etrace_ is a utility like strace or ltrace which uses ptrace to follow programs executed by a main program for performance and debugging analysis. It also supports limited tracing of file accesses for analyzing what files a program accesses during it's execution.
 
