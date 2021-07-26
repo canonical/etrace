@@ -52,7 +52,7 @@ type Command struct {
 	JSONOutput              bool     `short:"j" long:"json" description:"Output results in JSON"`
 	OutputFile              string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
 	NoWindowWait            bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	WindowWaitGlobalTimeout string   `long:"window-timeout" default:"60s" description:"Global timeout for waiting for windows to appear. Defaults to 60s. Set to empty string to use no timeout"`
+	WindowWaitGlobalTimeout string   `long:"window-timeout" default:"60s" description:"Global timeout for waiting for windows to appear. Set to empty string to use no timeout"`
 }
 
 // The current input command
