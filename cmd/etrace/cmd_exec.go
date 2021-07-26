@@ -102,6 +102,11 @@ func (x *cmdExec) Execute(args []string) error {
 		currentCmd.DiscardSnapNs = false
 	}
 
+	if currentCmd.SilentProgram {
+		currentCmd.ProgramStderrLog = "/dev/null"
+		currentCmd.ProgramStdoutLog = "/dev/null"
+	}
+
 	// check the output file
 	w := os.Stdout
 	if currentCmd.OutputFile != "" {
