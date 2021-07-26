@@ -144,3 +144,11 @@ func CurrentConnections(snapName string) ([]Connection, error) {
 
 	return conns, nil
 }
+
+func IsInstalled(snapName string) bool {
+	if _, err := exec.Command("snap", "list", snapName).CombinedOutput(); err != nil {
+		// then the snap is assumed to not be installed
+		return false
+	}
+	return true
+}

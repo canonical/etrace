@@ -139,11 +139,8 @@ func (x *cmdExec) Execute(args []string) error {
 	snapName := x.Args.Cmd[0]
 
 	// check if the snap is installed first if --use-snap-run is specified
-	if currentCmd.RunThroughSnap {
-		if _, err := exec.Command("snap", "list", snapName).CombinedOutput(); err != nil {
-			// then the snap is assumed to not be installed
-			return fmt.Errorf("snap %s is not installed", snapName)
-		}
+	if currentCmd.RunThroughSnap && !snaps.IsInstalled(snapName) {
+		return fmt.Errorf("snap %s is not installed", snapName)
 	}
 
 	if x.CleanSnapUserData {
@@ -290,6 +287,9 @@ func (x *cmdExec) Execute(args []string) error {
 			if err != nil {
 				return fmt.Errorf("failed to remove snap %s: %v (%s)", snapName, err, string(removeOut))
 			}
+
+			// TODO: defer something to go back to the original state of the
+			// snap here if we get interrupted
 
 			// now reinstall the snap
 			installCmd := exec.Command("snap", "install", tmpSnap)
