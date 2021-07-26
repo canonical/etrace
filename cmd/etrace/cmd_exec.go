@@ -63,6 +63,9 @@ type cmdExec struct {
 	ReinstallSnap     bool `long:"reinstall-snap" description:"Reinstall the snap before executing, restoring any existing interface connections for the snap"`
 	Repeat            uint `short:"n" long:"repeat" description:"Number of times to repeat each task"`
 
+	ColdWorstCase bool `long:"cold" description:"Use set of options for worst case, cold cache, etc performance"`
+	HotBestCase   bool `long:"hot" description:"Use set of options for best case, hot cache, etc performance"`
+
 	Args struct {
 		Cmd []string `description:"Command to run" required:"yes"`
 	} `positional-args:"yes" required:"yes"`
@@ -76,6 +79,29 @@ type straceResult struct {
 func (x *cmdExec) Execute(args []string) error {
 	if currentCmd.RunThroughFlatpak && currentCmd.RunThroughSnap {
 		return fmt.Errorf("cannot run through both flatpak and snap at same time")
+	}
+
+	if x.ColdWorstCase && x.HotBestCase {
+		return fmt.Errorf("cannot run both hot and cold at same time")
+	}
+
+	// handle meta options which override other options
+	if x.ColdWorstCase {
+		x.NoTrace = true
+		x.CleanSnapUserData = true
+		x.ReinstallSnap = true
+
+		// also for the global command
+		currentCmd.KeepVMCaches = false
+		currentCmd.DiscardSnapNs = true
+	} else if x.HotBestCase {
+		x.NoTrace = true
+		x.CleanSnapUserData = false
+		x.ReinstallSnap = false
+
+		// also for the global command
+		currentCmd.KeepVMCaches = true
+		currentCmd.DiscardSnapNs = false
 	}
 
 	// check the output file
