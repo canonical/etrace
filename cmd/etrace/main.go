@@ -49,6 +49,7 @@ type Command struct {
 	DiscardSnapNs           bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
 	ProgramStdoutLog        string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
 	ProgramStderrLog        string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	SilentProgram           bool     `long:"silent" description:"Silence all program output"`
 	JSONOutput              bool     `short:"j" long:"json" description:"Output results in JSON"`
 	OutputFile              string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
 	NoWindowWait            bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`

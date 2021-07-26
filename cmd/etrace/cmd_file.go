@@ -62,6 +62,11 @@ func (x *cmdFile) Execute(args []string) error {
 	if currentCmd.RunThroughFlatpak {
 		return fmt.Errorf("file tracing with flatpak not yet supported")
 	}
+	if currentCmd.SilentProgram {
+		currentCmd.ProgramStderrLog = "/dev/null"
+		currentCmd.ProgramStdoutLog = "/dev/null"
+	}
+
 	if !currentCmd.NoWindowWait {
 		// check if we are running on X11, if not then bail because we don't
 		// support graphical window waiting on wayland yet
