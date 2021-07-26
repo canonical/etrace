@@ -194,4 +194,4 @@ Currently, the `file` subcommand has a few limitations.
 1. The `--repeat` option is not yet implemented.
 
 ## License
-This project is licensed under the GPLv3. See LICENSE file for full license. Copyright 2019 Canonical Ltd.
+This project is licensed under the GPLv3. See LICENSE file for full license. Copyright 2019-2021 Canonical Ltd.
