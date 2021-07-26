@@ -45,13 +45,16 @@ Application Options:
       --restore-script-args=      Args to provide to the restore script
   -v, --keep-vm-caches            Don't free VM caches before executing
   -c, --class-name=               Window class to use with xdotool instead of the the first Command
+      --window-class-name=        Window class name to use with xdotool
   -s, --use-snap-run              Run command through snap run
+  -f, --use-flatpak-run           Run command through flatpak run
   -d, --discard-snap-ns           Discard the snap namespace before running the snap
       --cmd-stdout=               Log file for run command's stdout
       --cmd-stderr=               Log file for run command's stderr
   -j, --json                      Output results in JSON
   -o, --output-file=              A file to output the results (empty string means stdout)
       --no-window-wait            Don't wait for the window to appear, just run until the program exits
+      --window-timeout=           Global timeout for waiting for windows to appear. Set to empty string to use no timeout (default: 60s)
 
 Help Options:
   -h, --help                      Show this help message
@@ -61,6 +64,8 @@ Help Options:
           --clean-snap-user-data  Delete snap user data before executing and restore after execution
           --reinstall-snap        Reinstall the snap before executing, restoring any existing interface connections for the snap
       -n, --repeat=               Number of times to repeat each task
+          --cold                  Use set of options for worst case, cold cache, etc performance
+          --hot                   Use set of options for best case, hot cache, etc performance
 
 [exec command arguments]
   Cmd:                            Command to run
@@ -85,13 +90,16 @@ Application Options:
       --restore-script-args=        Args to provide to the restore script
   -v, --keep-vm-caches              Don't free VM caches before executing
   -c, --class-name=                 Window class to use with xdotool instead of the the first Command
+      --window-class-name=          Window class name to use with xdotool
   -s, --use-snap-run                Run command through snap run
+  -f, --use-flatpak-run             Run command through flatpak run
   -d, --discard-snap-ns             Discard the snap namespace before running the snap
       --cmd-stdout=                 Log file for run command's stdout
       --cmd-stderr=                 Log file for run command's stderr
   -j, --json                        Output results in JSON
   -o, --output-file=                A file to output the results (empty string means stdout)
       --no-window-wait              Don't wait for the window to appear, just run until the program exits
+      --window-timeout=             Global timeout for waiting for windows to appear. Set to empty string to use no timeout (default: 60s)
 
 Help Options:
   -h, --help                        Show this help message
