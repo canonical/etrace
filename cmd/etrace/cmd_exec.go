@@ -413,7 +413,15 @@ func (x *cmdExec) Execute(args []string) error {
 
 		if currentCmd.DiscardSnapNs {
 			if !currentCmd.RunThroughSnap {
-				return errors.New("cannot use --discard-snap-ns without --use-snap-run")
+				// check if the command provided resolves to /snap/bin/<exec>,
+				// otherwise fail
+				bin, err := exec.LookPath(x.Args.Cmd[0])
+				// this regexp also handles the cross distro case of
+				// /var/lib/snapd/snap/bin/<exec> too
+				snapBinRegexp := regexp.MustCompile(`.*\/snap\/bin$`)
+				if err != nil || !snapBinRegexp.MatchString(filepath.Dir(bin)) {
+					return errors.New("cannot use --discard-snap-ns without --use-snap-run or a command that resolves to /snap/bin/<cmd>")
+				}
 			}
 			// the name of the snap in this case is the first argument
 			err := snaps.DiscardSnapNs(x.Args.Cmd[0])
