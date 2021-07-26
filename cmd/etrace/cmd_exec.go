@@ -87,7 +87,6 @@ func (x *cmdExec) Execute(args []string) error {
 
 	// handle meta options which override other options
 	if x.ColdWorstCase {
-		x.NoTrace = true
 		x.CleanSnapUserData = true
 		x.ReinstallSnap = true
 
@@ -95,7 +94,6 @@ func (x *cmdExec) Execute(args []string) error {
 		currentCmd.KeepVMCaches = false
 		currentCmd.DiscardSnapNs = true
 	} else if x.HotBestCase {
-		x.NoTrace = true
 		x.CleanSnapUserData = false
 		x.ReinstallSnap = false
 
