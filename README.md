@@ -1,5 +1,6 @@
 # etrace
 [![Actions Status](https://github.com/anonymouse64/etrace/workflows/Go/badge.svg)](https://github.com/anonymouse64/etrace/actions)
+[![Snap Status](https://github.com/canonical/etrace/actions/workflows/snap.yml/badge.svg)](https://github.com/canonical/etrace/actions/workflows/snap.yml)
 [![etrace](https://snapcraft.io//etrace/badge.svg)](https://snapcraft.io/etrace)
 [![Go Report Card](https://goreportcard.com/badge/github.com/canonical/etrace)](https://goreportcard.com/report/github.com/canonical/etrace)
 
