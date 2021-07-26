@@ -33,27 +33,28 @@ import (
 
 // Command is the command for the runner
 type Command struct {
-	File                    cmdFile  `command:"file" description:"Trace files accessed from a program"`
-	Exec                    cmdExec  `command:"exec" description:"Trace the program executions from a program"`
-	ShowErrors              bool     `short:"e" long:"errors" description:"Show errors as they happen"`
-	WindowName              string   `short:"w" long:"window-name" description:"Window name to wait for"`
-	PrepareScript           string   `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
-	PrepareScriptArgs       []string `long:"prepare-script-args" description:"Args to provide to the prepare script"`
-	RestoreScript           string   `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
-	RestoreScriptArgs       []string `long:"restore-script-args" description:"Args to provide to the restore script"`
-	KeepVMCaches            bool     `short:"v" long:"keep-vm-caches" description:"Don't free VM caches before executing"`
-	WindowClass             string   `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
-	WindowClassName         string   `long:"window-class-name" description:"Window class name to use with xdotool"`
-	RunThroughSnap          bool     `short:"s" long:"use-snap-run" description:"Run command through snap run"`
-	RunThroughFlatpak       bool     `short:"f" long:"use-flatpak-run" description:"Run command through flatpak run"`
-	DiscardSnapNs           bool     `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
-	ProgramStdoutLog        string   `long:"cmd-stdout" description:"Log file for run command's stdout"`
-	ProgramStderrLog        string   `long:"cmd-stderr" description:"Log file for run command's stderr"`
-	SilentProgram           bool     `long:"silent" description:"Silence all program output"`
-	JSONOutput              bool     `short:"j" long:"json" description:"Output results in JSON"`
-	OutputFile              string   `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
-	NoWindowWait            bool     `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
-	WindowWaitGlobalTimeout string   `long:"window-timeout" default:"60s" description:"Global timeout for waiting for windows to appear. Set to empty string to use no timeout"`
+	File                    cmdFile        `command:"file" description:"Trace files accessed from a program"`
+	Exec                    cmdExec        `command:"exec" description:"Trace the program executions from a program"`
+	AnalyzeSnap             cmdAnalyzeSnap `command:"analyze-snap" description:"Analyze a snap for performance data"`
+	ShowErrors              bool           `short:"e" long:"errors" description:"Show errors as they happen"`
+	WindowName              string         `short:"w" long:"window-name" description:"Window name to wait for"`
+	PrepareScript           string         `short:"p" long:"prepare-script" description:"Script to run to prepare a run"`
+	PrepareScriptArgs       []string       `long:"prepare-script-args" description:"Args to provide to the prepare script"`
+	RestoreScript           string         `short:"r" long:"restore-script" description:"Script to run to restore after a run"`
+	RestoreScriptArgs       []string       `long:"restore-script-args" description:"Args to provide to the restore script"`
+	KeepVMCaches            bool           `short:"v" long:"keep-vm-caches" description:"Don't free VM caches before executing"`
+	WindowClass             string         `short:"c" long:"class-name" description:"Window class to use with xdotool instead of the the first Command"`
+	WindowClassName         string         `long:"window-class-name" description:"Window class name to use with xdotool"`
+	RunThroughSnap          bool           `short:"s" long:"use-snap-run" description:"Run command through snap run"`
+	RunThroughFlatpak       bool           `short:"f" long:"use-flatpak-run" description:"Run command through flatpak run"`
+	DiscardSnapNs           bool           `short:"d" long:"discard-snap-ns" description:"Discard the snap namespace before running the snap"`
+	ProgramStdoutLog        string         `long:"cmd-stdout" description:"Log file for run command's stdout"`
+	ProgramStderrLog        string         `long:"cmd-stderr" description:"Log file for run command's stderr"`
+	SilentProgram           bool           `long:"silent" description:"Silence all program output"`
+	JSONOutput              bool           `short:"j" long:"json" description:"Output results in JSON"`
+	OutputFile              string         `short:"o" long:"output-file" description:"A file to output the results (empty string means stdout)"`
+	NoWindowWait            bool           `long:"no-window-wait" description:"Don't wait for the window to appear, just run until the program exits"`
+	WindowWaitGlobalTimeout string         `long:"window-timeout" default:"60s" description:"Global timeout for waiting for windows to appear. Set to empty string to use no timeout"`
 }
 
 // The current input command
