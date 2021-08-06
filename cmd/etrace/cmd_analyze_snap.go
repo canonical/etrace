@@ -39,8 +39,9 @@ import (
 )
 
 type cmdAnalyzeSnap struct {
-	InstallChannel string `long:"channel" description:"Channel to install the snap from if not already installed"`
-	Args           struct {
+	InstallChannel    string `long:"channel" description:"Channel to install the snap from if not already installed"`
+	CompressionMethod string `long:"compression" description:"Compression method to use to compare performance methods with"`
+	Args              struct {
 		Snap string `description:"Snap to analyze" required:"yes"`
 	} `positional-args:"yes" required:"yes"`
 }
@@ -48,6 +49,7 @@ type cmdAnalyzeSnap struct {
 func (x *cmdAnalyzeSnap) Execute(args []string) error {
 
 	snapName := x.Args.Snap
+	x.CompressionMethod = strings.ToLower(x.CompressionMethod)
 
 	// analyze looks at a few aspects of the snap:
 	// 1. The size of the snap as-is from installed
@@ -55,9 +57,9 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 	// 3. What content interface dependency snaps does this snap have
 	// 4. Worst case performance launch data
 	// 5. Best case performance launch data
-	// 6. (optional) if XZ compressed, worst case performance launch if it was switched to LZO
-	// 7. (optional) if XZ compressed, best case performance launch if it was switched to LZO
-	// 8. (optional) if XZ compressed, file size increase if it was switched to LZO
+	// 6. (optional) if different compression method requested, worst case performance launch if it was switched
+	// 7. (optional) if different compression method requested, best case performance launch if it was switched
+	// 8. (optional) if different compression method requested, file size increase if it was switched
 
 	tmpWorkDir, err := ioutil.TempDir("", fmt.Sprintf("etrace-analyze-%s", snapName))
 	if err != nil {
@@ -126,6 +128,18 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 		// TODO: what about test snaps with actually no compression in the squashfs?
 		return fmt.Errorf("error: snap has no compression or unsquashfs output is corrupted")
 	}
+	compressionFormat = strings.ToLower(compressionFormat)
+
+	if x.CompressionMethod == "" {
+		// if the snap was xz, by default test against lzo
+		if compressionFormat == "xz" {
+			x.CompressionMethod = "lzo"
+		} else {
+			// otherwise make the "desired" format the same as what it is so
+			// we effectively skip the check against another format
+			x.CompressionMethod = compressionFormat
+		}
+	}
 
 	fmt.Printf("original compression format is %s\n", compressionFormat)
 
@@ -173,15 +187,18 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 	fmt.Printf("\taverage time to display: %s\n", meanBest)
 	fmt.Printf("\tstandard deviation for time to display: %s\n", stdDevBest)
 
-	if strings.ToLower(compressionFormat) != "xz" {
+	// if the requested compression method is what was requested, then we can
+	// stop
+	if compressionFormat == x.CompressionMethod {
 		// nothing left to check
 		return nil
 	}
 
-	// otherwise it was xz, we should check LZO
+	// otherwise it was different, we should check the compression method
+	// requested
 
-	// first unpack the snap and repack it with LZO
-	lzoSnapFile := filepath.Join(tmpWorkDir, snapName+"_lzo.snap")
+	// first unpack the snap and repack it with the desired compression method
+	altCompSnapFile := filepath.Join(tmpWorkDir, fmt.Sprintf("%s_%s.snap", snapName, x.CompressionMethod))
 	unpackDir := filepath.Join(tmpWorkDir, "unpacked-snap")
 	unsquashfsCmd = exec.Command("unsquashfs", "-d", unpackDir, originalSnapFile)
 	commands.AddSudoIfNeeded(unsquashfsCmd)
@@ -189,22 +206,62 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 		return err
 	}
 
-	// now re-pack as lzo
-	packCmd := exec.Command("snap",
-		"pack",
-		"--filename="+lzoSnapFile,
-		"--compression=lzo",
-		unpackDir,
-	)
+	// now re-pack
+	var packCmd *exec.Cmd
+	switch x.CompressionMethod {
+	case "xz", "lzo":
+		// supported by snap pack properly
+		packCmd = exec.Command("snap",
+			"pack",
+			"--filename="+altCompSnapFile,
+			"--compression="+x.CompressionMethod,
+			unpackDir,
+		)
+	case "none":
+		packCmd = exec.Command("mksquashfs",
+			unpackDir,
+			altCompSnapFile,
+			"-noappend",
+			"-noD", // don't compress data blocks
+			// TODO: investigate the other options to see if they have any effect
+			// "-noI",
+			// "-noId",
+			// "-noF",
+			// "-noX",
+			"-no-fragments",
+			"-no-progress",
+			// these options should only be used for app snaps, not for snapd/core snap,
+			// so if this ever gets expanded to testing those snap types too,
+			// then this needs to be removed
+			"-all-root",
+			"-no-xattrs",
+		)
+	case "zstd", "gzip":
+		packCmd = exec.Command("mksquashfs",
+			unpackDir,
+			altCompSnapFile,
+			"-noappend",
+			"-comp", x.CompressionMethod,
+			"-no-fragments",
+			"-no-progress",
+			// these options should only be used for app snaps, not for snapd/core snap,
+			// so if this ever gets expanded to testing those snap types too,
+			// then this needs to be removed
+			"-all-root",
+			"-no-xattrs",
+		)
+	default:
+		return fmt.Errorf("unknown compression method %s", x.CompressionMethod)
+	}
 	commands.AddSudoIfNeeded(packCmd)
 	if err := packCmd.Run(); err != nil {
 		return err
 	}
 
-	// now install the lzo version
+	// now install the new version
 	// TODO: handle devmode or classic snap options, etc. with the logic from
 	// exec cmd
-	installCmd := exec.Command("snap", "install", "--dangerous", lzoSnapFile)
+	installCmd := exec.Command("snap", "install", "--dangerous", altCompSnapFile)
 	commands.AddSudoIfNeeded(installCmd)
 	if err := installCmd.Run(); err != nil {
 		return err
@@ -219,37 +276,37 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 		}
 	}()
 
-	// now we should have the LZO version installed, get data for this one
+	// now we should have the new version installed, get data for this one
 
 	// 6. Get the worst case performance data using etrace
-	meanWorstLZO, stdDevWorseLZO, err := performanceData("--cold", snapName)
+	meanWorstAlt, stdDevWorseAlt, err := performanceData("--cold", snapName)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("worst case performance with LZO compression:\n")
-	fmt.Printf("\taverage time to display: %s\n", meanWorstLZO)
-	fmt.Printf("\tstandard deviation for time to display: %s\n", stdDevWorseLZO)
-	fmt.Printf("\taverage time to display percent change: %s\n", percentDiffDuration(meanWorst, meanWorstLZO))
+	fmt.Printf("worst case performance with %s compression:\n", x.CompressionMethod)
+	fmt.Printf("\taverage time to display: %s\n", meanWorstAlt)
+	fmt.Printf("\tstandard deviation for time to display: %s\n", stdDevWorseAlt)
+	fmt.Printf("\taverage time to display percent change: %s\n", percentDiffDuration(meanWorst, meanWorstAlt))
 
 	// 7. Get the best case performance data using etrace
-	meanBestLZO, stdDevBestLZO, err := performanceData("--hot", snapName)
+	meanBestAlt, stdDevBestAlt, err := performanceData("--hot", snapName)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("best case performance with LZO compression:\n")
-	fmt.Printf("\taverage time to display: %s\n", meanBestLZO)
-	fmt.Printf("\tstandard deviation for time to display: %s\n", stdDevBestLZO)
-	fmt.Printf("\taverage time to display percent change: %s\n", percentDiffDuration(meanBest, meanBestLZO))
+	fmt.Printf("best case performance with %s compression:\n", x.CompressionMethod)
+	fmt.Printf("\taverage time to display: %s\n", meanBestAlt)
+	fmt.Printf("\tstandard deviation for time to display: %s\n", stdDevBestAlt)
+	fmt.Printf("\taverage time to display percent change: %s\n", percentDiffDuration(meanBest, meanBestAlt))
 
-	// 8. Calculate the percent change in filesize between LZO and XZ
-	st, err = os.Stat(lzoSnapFile)
+	// 8. Calculate the percent change in filesize between the two versions
+	st, err = os.Stat(altCompSnapFile)
 	if err != nil {
 		return err
 	}
-	lzoSz := quantity.Size(st.Size())
-	fmt.Printf("lzo snap size: %s (change of %s)\n", lzoSz.IECString(), percentDiffSz(origSz, lzoSz))
+	altSz := quantity.Size(st.Size())
+	fmt.Printf("%s snap size: %s (change of %s)\n", x.CompressionMethod, altSz.IECString(), percentDiffSz(origSz, altSz))
 
 	return nil
 }
