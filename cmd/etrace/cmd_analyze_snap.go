@@ -318,7 +318,9 @@ func percentDiffDuration(d1, d2 time.Duration) string {
 	} else {
 		sign = "-"
 	}
-	return fmt.Sprintf("%s%.2f%%", sign, math.Abs(100*float64(d2-d1)/float64(d1)))
+	d1Float := float64(d1)
+	d2Float := float64(d2)
+	return fmt.Sprintf("%s%.2f%%", sign, math.Abs(100*(d2Float-d1Float)/d1Float))
 }
 
 func percentDiffSz(sz1, sz2 quantity.Size) string {
@@ -328,7 +330,9 @@ func percentDiffSz(sz1, sz2 quantity.Size) string {
 	} else {
 		sign = "-"
 	}
-	return fmt.Sprintf("%s%.2f%%", sign, math.Abs(100*float64(sz2-sz1)/float64(sz1)))
+	sz1Float := float64(sz1)
+	sz2Float := float64(sz2)
+	return fmt.Sprintf("%s%.2f%%", sign, math.Abs(100*(sz2Float-sz1Float)/sz1Float))
 }
 
 func meanAndStdDevForRuns(runs ExecOutputResult) (time.Duration, time.Duration, error) {
