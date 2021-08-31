@@ -54,7 +54,7 @@ type Execution struct {
 	ExecveTiming  *strace.ExecveTiming `json:",omitempty"`
 	TimeToDisplay time.Duration        `json:",omitempty"`
 	TimeToRun     time.Duration        `json:",omitempty"`
-	Errors        []error              `json:",omitempty"`
+	Errors        []string             `json:",omitempty"`
 }
 
 type cmdExec struct {

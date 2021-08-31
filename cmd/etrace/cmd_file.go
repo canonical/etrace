@@ -55,7 +55,7 @@ type cmdFile struct {
 type FileOutputResult struct {
 	ExecvePaths   *strace.ExecvePaths `json:",omitempty"`
 	TimeToDisplay time.Duration       `json:",omitempty"`
-	Errors        []error             `json:",omitempty"`
+	Errors        []string            `json:",omitempty"`
 }
 
 func (x *cmdFile) Execute(args []string) error {
