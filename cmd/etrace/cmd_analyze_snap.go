@@ -387,7 +387,7 @@ func performanceData(mode, snapName string) (man, stdDev time.Duration, err erro
 	// parse the output as json
 	var execOutputJSON ExecOutputResult
 	if err := json.Unmarshal(out, &execOutputJSON); err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("error getting results from sub-etrace process: %v (full output is %s)", err, string(out))
 	}
 
 	if mode == "--hot" {
