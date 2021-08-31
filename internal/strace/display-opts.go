@@ -19,7 +19,7 @@ package strace
 
 // DisplayOptions is a silly struct for passing in display options like whether
 // to display programs or just files for the file command
-// TOOD: make this go away and do it more cleanly
+// TODO: make this go away and do it more cleanly
 type DisplayOptions struct {
 	NoDisplayPrograms bool
 }

@@ -72,7 +72,6 @@ func (x *cmdAnalyzeSnap) Execute(args []string) error {
 		if err := exec.Command("snap", "install", snapName, "--channel="+x.InstallChannel).Run(); err != nil {
 			return fmt.Errorf("unable to install snap %s and analyze: %w", snapName, err)
 		}
-
 	}
 
 	// now make a copy of what is currently installed as the original version to
@@ -389,6 +388,8 @@ func performanceData(mode, snapName string) (man, stdDev time.Duration, err erro
 	if err := json.Unmarshal(out, &execOutputJSON); err != nil {
 		return 0, 0, fmt.Errorf("error getting results from sub-etrace process: %v (full output is %s)", err, string(out))
 	}
+
+	// TODO: actually handle errors in the result here
 
 	if mode == "--hot" {
 		// discard the first run as it may have been a "cold" one

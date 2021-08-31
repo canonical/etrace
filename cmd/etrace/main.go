@@ -131,14 +131,14 @@ func tabWriterGeneric(w io.Writer) *tabwriter.Writer {
 	return tabwriter.NewWriter(w, 5, 3, 2, ' ', 0)
 }
 
-var errs []error
+var errs []string
 
 func resetErrors() {
 	errs = nil
 }
 
 func logError(err error) {
-	errs = append(errs, err)
+	errs = append(errs, err.Error())
 	if currentCmd.ShowErrors {
 		log.Println(err)
 	}
