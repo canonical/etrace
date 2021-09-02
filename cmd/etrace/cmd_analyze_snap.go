@@ -366,17 +366,29 @@ func performanceData(mode, snapName string) (man, stdDev time.Duration, err erro
 
 	// TODO: just call the right functions from this same process, this is a bit
 	// unfortunate to call ourself externally like this
-	cmd := exec.Command("etrace",
-		"exec",
+	args := []string{"exec",
 		"--json",                 // we want machine readable output
-		"--repeat="+runs,         // we want statistically significant results
+		"--repeat=" + runs,       // we want statistically significant results
 		"--use-snap-run",         // we are running a snap
 		mode,                     // for whatever mode was specified
 		"--cmd-stderr=/dev/null", // we don't want any stderr output
 		"--cmd-stdout=/dev/null", // we don't want any stdout output
 		"--no-trace",             // we don't want to trace for best performance
 		snapName,
-	)
+	}
+
+	// handle window opts passed into analyze-snap
+	if currentCmd.WindowName != "" {
+		args = append(args, "--window-name="+currentCmd.WindowName)
+	}
+	if currentCmd.WindowClass != "" {
+		args = append(args, "--class-name="+currentCmd.WindowClass)
+	}
+	if currentCmd.WindowClassName != "" {
+		args = append(args, "--window-class-name="+currentCmd.WindowClassName)
+	}
+
+	cmd := exec.Command("etrace", args...)
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
