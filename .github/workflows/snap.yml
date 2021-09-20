@@ -12,7 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2.3.4
       - name: Build the snap
-        uses: snapcore/action-build@v1.0.8
+        uses: snapcore/action-build@v1.0.9
       - name: Uploading snap artifact
         uses: actions/upload-artifact@v2
         with:
