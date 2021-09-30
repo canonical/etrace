@@ -283,7 +283,12 @@ func (x *cmdExec) Execute(args []string) error {
 			}
 
 			// now remove the snap
-			removeOut, err := exec.Command("snap", "remove", snapName).CombinedOutput()
+			removeCmd := exec.Command("snap", "remove", snapName)
+			if err := commands.AddSudoIfNeeded(removeCmd); err != nil {
+				return fmt.Errorf("failed to add sudo if needed: %v", err)
+			}
+
+			removeOut, err := removeCmd.CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("failed to remove snap %s: %v (%s)", snapName, err, string(removeOut))
 			}
