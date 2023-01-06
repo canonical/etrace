@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2.4.0
+        uses: actions/checkout@v3.3.0
       - name: Build the snap
         uses: snapcore/action-build@v1.0.9
       - name: Uploading snap artifact
