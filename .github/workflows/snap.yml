@@ -14,7 +14,7 @@ jobs:
       - name: Build the snap
         uses: snapcore/action-build@v1.0.9
       - name: Uploading snap artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: snap-files
           path: "*.snap"
@@ -23,7 +23,7 @@ jobs:
     needs: build-snap
     steps:
       - name: Download built snap
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: snap-files
       - name: Install built snap
